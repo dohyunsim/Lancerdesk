@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 
 const navItems = [
@@ -13,6 +14,19 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => d && setUser(d));
+  }, []);
+
+  function copyId() {
+    if (!user) return;
+    navigator.clipboard.writeText(user.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <aside className="w-52 bg-gray-900 text-gray-100 flex flex-col flex-shrink-0">
@@ -44,8 +58,20 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t border-gray-700 text-xs text-gray-500">
-        v1.0.0
+      <div className="px-4 py-4 border-t border-gray-700 space-y-2">
+        {user && (
+          <div>
+            <p className="text-xs text-gray-400 truncate">{user.name}</p>
+            <button
+              onClick={copyId}
+              title="클릭해서 User ID 복사"
+              className="w-full text-left mt-1 text-xs text-gray-600 hover:text-gray-300 font-mono truncate transition-colors"
+            >
+              {copied ? "✓ 복사됨" : `ID: ${user.id.slice(0, 8)}…`}
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-gray-600">v1.0.0</p>
       </div>
     </aside>
   );
