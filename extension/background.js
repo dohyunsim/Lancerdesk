@@ -135,45 +135,64 @@ async function getAISuggestion(conversationId, messages, category, stylePrompt =
 }
 
 // ─── 사이드패널 자동 열기 / 닫기 ────────────────────────────────────────────
-// 숨고 탭: 패널 활성화 + 자동 열기 / 그 외 탭: 패널 비활성화(슬라이드 아웃)
 
 function isSoomgoUrl(url) {
-  return !!url && (url.includes("soomgo.com"));
+  return typeof url === "string" && url.includes("soomgo.com");
 }
 
-async function syncSidePanel(tabId, url) {
-  try {
-    if (isSoomgoUrl(url)) {
-      await chrome.sidePanel.setOptions({ tabId, enabled: true, path: "sidepanel.html" });
-      await chrome.sidePanel.open({ tabId });
-    } else {
-      await chrome.sidePanel.setOptions({ tabId, enabled: false });
-    }
-  } catch (_) {
-    // open()은 특정 컨텍스트에서만 허용 — 실패해도 무시
+// 현재 활성 탭 ID 반환
+async function getActiveTabId() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab?.id ?? null;
+}
+
+// setOptions만 (백그라운드 탭 포함, 언제든 안전하게 호출 가능)
+function applyPanelOptions(tabId, isSoomgo) {
+  if (isSoomgo) {
+    chrome.sidePanel.setOptions({ tabId, enabled: true, path: "sidepanel.html" }).catch(() => {});
+  } else {
+    chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
   }
 }
 
-// 탭 전환 시
+// 탭 전환 시 — onActivated 핸들러 내부에서 open() 호출 (이벤트 컨텍스트 내)
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   try {
     const tab = await chrome.tabs.get(tabId);
-    syncSidePanel(tabId, tab.url);
+    const url = tab.url || tab.pendingUrl || "";
+    applyPanelOptions(tabId, isSoomgoUrl(url));
+    if (isSoomgoUrl(url)) {
+      // onActivated 컨텍스트는 open() 허용
+      chrome.sidePanel.open({ tabId }).catch(() => {});
+    }
   } catch (_) {}
 });
 
 // URL 변경 / 페이지 로드 완료 시
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete") return;
-  const url = tab.url || "";
-  if (isSoomgoUrl(url)) {
-    // 숨고 페이지 전환 시 대화 ID 초기화
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // URL이 바뀌거나 로드 완료된 경우만 처리
+  if (!changeInfo.url && changeInfo.status !== "complete") return;
+
+  const url = changeInfo.url || tab.url || "";
+  const soomgo = isSoomgoUrl(url);
+
+  // 숨고 페이지 전환: 대화 ID 초기화
+  if (soomgo && changeInfo.status === "complete") {
     chrome.storage.local.remove("currentConversationId");
   }
-  syncSidePanel(tabId, url);
+
+  applyPanelOptions(tabId, soomgo);
+
+  // open()은 현재 활성 탭일 때만 의미 있음
+  if (soomgo) {
+    const activeId = await getActiveTabId();
+    if (activeId === tabId) {
+      chrome.sidePanel.open({ tabId }).catch(() => {});
+    }
+  }
 });
 
-// 확장 아이콘 클릭 (수동 토글)
+// 확장 아이콘 클릭 (수동 열기)
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
 });
