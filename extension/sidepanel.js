@@ -26,6 +26,7 @@ const profileFab         = document.getElementById("profile-fab");
 const profileFabMenu     = document.getElementById("profile-fab-menu");
 const userEmailDisplay   = document.getElementById("user-email-display");
 const logoutBtn          = document.getElementById("logout-btn");
+const dashboardFab       = document.getElementById("dashboard-fab");
 
 // 오버레이
 const refOverlay         = document.getElementById("ref-overlay");
@@ -147,6 +148,11 @@ logoutBtn.addEventListener("click", () => {
   });
 });
 
+// 대시보드 FAB → 새 탭으로 대시보드 열기
+dashboardFab.addEventListener("click", () => {
+  chrome.tabs.create({ url: DASHBOARD_URL });
+});
+
 // ─── Chat data from content script ───────────────────────────────────────────
 function updateChatMeta(data) {
   currentChatData = data;
@@ -174,11 +180,11 @@ async function fetchChatData() {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "CHAT_UPDATED" && message.payload) {
     updateChatMeta(message.payload);
-    chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
-      if (res?.conversationId) currentConversationId = res.conversationId;
-    });
-    // 대화방 진입 시 히스토리 자동 갱신
-    setTimeout(() => loadConversations(), 1500);
+  }
+  // background가 DB 저장 완료 후 보내는 신호 → 목록 즉시 갱신
+  if (message.type === "CONV_SAVED") {
+    if (message.conversationId) currentConversationId = message.conversationId;
+    loadConversations();
   }
 });
 

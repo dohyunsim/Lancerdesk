@@ -65,13 +65,7 @@ async function saveConversation(chatData) {
   const cachedId = urlConvMap[soomgoUrl];
 
   if (cachedId) {
-    const lastMsg = chatData.messages[chatData.messages.length - 1];
-    if (lastMsg) {
-      await apiRequest(`/conversations/${cachedId}/messages`, {
-        method: "POST",
-        body: JSON.stringify(lastMsg),
-      });
-    }
+    // 이미 저장된 대화방 → 캐시된 ID만 반환 (매 mutation마다 중복 저장 방지)
     chrome.storage.local.set({ currentConversationId: cachedId });
     return { id: cachedId };
   }
@@ -85,13 +79,6 @@ async function saveConversation(chatData) {
       const existingId = existing[0].id;
       urlConvMap[soomgoUrl] = existingId;
       chrome.storage.local.set({ urlConvMap, currentConversationId: existingId });
-      const lastMsg = chatData.messages[chatData.messages.length - 1];
-      if (lastMsg) {
-        await apiRequest(`/conversations/${existingId}/messages`, {
-          method: "POST",
-          body: JSON.stringify(lastMsg),
-        });
-      }
       return { id: existingId };
     }
   } catch (_) { /* fallthrough */ }
@@ -151,8 +138,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (type === "CHAT_UPDATED") {
     saveConversation(payload)
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
+      .then((conv) => {
+        sendResponse({ success: true });
+        if (conv) {
+          // 저장 완료 → sidepanel에 목록 갱신 알림
+          chrome.runtime.sendMessage({ type: "CONV_SAVED", conversationId: conv.id }).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.error("[Lancerdesk] saveConversation failed:", err.message);
+        sendResponse({ success: false, error: err.message });
+      });
     return true;
   }
 

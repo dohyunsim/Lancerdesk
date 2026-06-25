@@ -109,13 +109,18 @@
     </button>
   </div>
 
-  <!-- 우측 하단 고정: 프로필/로그아웃 -->
+  <!-- 좌측 하단 고정: 프로필/로그아웃 -->
   <div id="profile-fab-wrap" class="profile-fab-wrap hidden">
-    <div id="profile-fab-menu" class="profile-fab-menu hidden">
+    <div id="profile-fab-menu" class="profile-fab-menu profile-fab-menu-left hidden">
       <span id="user-email-display" class="fab-email"></span>
       <button id="logout-btn" class="btn btn-outline btn-sm" style="margin-top:6px;">로그아웃</button>
     </div>
     <button id="profile-fab" class="profile-fab" title="프로필">👤</button>
+  </div>
+
+  <!-- 우측 하단 고정: 대시보드 이동 -->
+  <div id="dashboard-fab-wrap" class="dashboard-fab-wrap">
+    <button id="dashboard-fab" class="dashboard-fab" title="대시보드 열기">📊</button>
   </div>
 
   <!-- AI 참고 대화 오버레이 (바텀시트) -->
