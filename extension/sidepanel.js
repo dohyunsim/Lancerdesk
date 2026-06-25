@@ -240,8 +240,9 @@ async function loadConversations() {
           const msgCount = (conv.messages || []).length;
           const range = msgCount > 0 ? `1~${msgCount}번 메시지` : "메시지 없음";
           const date = new Date(conv.created_at).toLocaleDateString("ko-KR");
+          const convUrl = conv.soomgo_url || "";
           return `
-            <li class="conv-item">
+            <li class="conv-item${convUrl ? " conv-item-link" : ""}" data-url="${convUrl}">
               <div class="conv-main">
                 <span class="conv-client-name">${name}</span>
                 <span class="conv-client-id">ID: ${cid}</span>
@@ -253,6 +254,17 @@ async function loadConversations() {
             </li>`;
         })
         .join("");
+
+      // 대화 항목 클릭 → 해당 숨고 URL로 현재 탭 이동
+      conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
+        item.addEventListener("click", () => {
+          const url = item.dataset.url;
+          if (!url) return;
+          chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+            if (tab?.id) chrome.tabs.update(tab.id, { url });
+          });
+        });
+      });
     }
   );
 }

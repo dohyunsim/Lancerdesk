@@ -298,3 +298,5 @@ body {
 .conv-client-id { font-size:10px; color:var(--text-secondary); }
 .conv-sub { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-secondary); width:100%; }
 .conv-date { margin-left:auto; }
+.conv-item-link { cursor:pointer; }
+.conv-item-link:hover { border-color:var(--primary); background:#eef2ff; }

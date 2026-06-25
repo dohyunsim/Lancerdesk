@@ -74,50 +74,58 @@ function detectCategoryFromLabel(label) {
  */
 function extractClientInfo() {
   const url = window.location.href;
-  const idMatch = url.match(/\/(\d{4,})/g);
-  const clientId = idMatch ? idMatch[idMatch.length - 1].replace("/", "") : null;
 
-  // 고객명: 숨고 React 앱 다중 셀렉터
-  const nameSelectors = [
-    "[class*='ChatRoomHeader'] [class*='name']",
-    "[class*='ChatHeader'] [class*='Name']",
-    "[class*='RoomHeader'] h2",
-    "[class*='RoomHeader'] h1",
-    "[class*='UserName']",
-    "[class*='clientName']",
-    "[class*='ClientName']",
-    "[class*='profile'] [class*='name']",
-    "[class*='Profile'] [class*='name']",
-    "[class*='partner']",
-    "[class*='opponent']",
-    "[class*='other-user']",
-    "[class*='sender-name']",
-  ];
+  // URL에서 채팅방 ID 추출 (/chats/숫자 패턴 우선, 없으면 마지막 긴 숫자)
+  const chatIdMatch = url.match(/\/chats\/(\d+)/);
+  const pathNumbers = url.match(/\/(\d{5,})/g);
+  const clientId = chatIdMatch
+    ? chatIdMatch[1]
+    : pathNumbers
+    ? pathNumbers[pathNumbers.length - 1].slice(1)
+    : null;
+
+  // TreeWalker로 전체 텍스트 노드 수집
+  const textNodes = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const text = walker.currentNode.textContent?.trim();
+    if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
+  }
+
+  // 고객명: "N시간 전 접속" 또는 "N분 전 접속" 텍스트 직전의 한국어 이름
   let clientName = null;
-  for (const sel of nameSelectors) {
-    const el = document.querySelector(sel);
-    const text = el?.textContent?.trim();
-    if (text && text.length > 0 && text.length < 20) {
-      clientName = text;
+  for (let i = 0; i < textNodes.length; i++) {
+    if (textNodes[i].text.match(/\d+(시간|분|일|초)\s*전\s*접속/)) {
+      for (let j = Math.max(0, i - 10); j < i; j++) {
+        const t = textNodes[j].text;
+        if (/^[가-힣]{2,8}$/.test(t)) {
+          clientName = t;
+          break;
+        }
+      }
       break;
     }
   }
 
-  // 카테고리 DOM 직접 추출
-  const categorySelectors = [
-    "[class*='ServiceCategory']",
-    "[class*='serviceCategory']",
-    "[class*='service-category']",
-    "[class*='RequestCategory']",
-    "[class*='CategoryName']",
-    "[class*='category-label']",
-    "[class*='categoryName']",
+  // 폴백: 상단 heading 요소에서 한국어 이름 탐색
+  if (!clientName) {
+    for (const h of document.querySelectorAll("h1,h2,h3,h4")) {
+      const t = h.textContent?.trim() || "";
+      if (/^[가-힣]{2,8}$/.test(t)) { clientName = t; break; }
+    }
+  }
+
+  // 카테고리: 서비스 키워드가 포함된 짧은 텍스트 노드
+  const categoryKeywords = [
+    "제작", "개발", "번역", "편집", "디자인", "작성",
+    "촬영", "컨설팅", "PPT", "ppt", "영상", "웹", "앱", "로고", "배너",
   ];
   let domCategory = null;
-  for (const sel of categorySelectors) {
-    const el = document.querySelector(sel);
-    const text = el?.textContent?.trim();
-    if (text && text.length > 0 && text.length < 50) {
+  for (const { text } of textNodes) {
+    if (
+      text.length >= 2 && text.length <= 20 &&
+      categoryKeywords.some((kw) => text.includes(kw))
+    ) {
       domCategory = text;
       break;
     }
