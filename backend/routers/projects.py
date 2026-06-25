@@ -3,37 +3,30 @@ from __future__ import annotations
 from uuid import UUID
 
 import psycopg2.extras
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from fastapi.security.api_key import APIKeyHeader
 
-from backend.config import API_KEY
+from backend.dependencies import get_current_user
 from backend.models.project import ProjectCreate, ProjectUpdate
 from backend.services.db import get_db
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=True)
-
-
-def verify_api_key(key: str = Security(api_key_header)) -> str:
-    if key != API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-    return key
 
 
 @router.get("", response_model=list[dict])
 def list_projects(
     user_id: str | None = None,
     status: str | None = None,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> list[dict]:
+    effective_user_id = user["user_id"] if user["auth_type"] == "jwt" else user_id
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             conditions = []
             values = []
-            if user_id:
+            if effective_user_id:
                 conditions.append("user_id = %s")
-                values.append(user_id)
+                values.append(effective_user_id)
             if status:
                 conditions.append("status = %s")
                 values.append(status)
@@ -46,7 +39,7 @@ def list_projects(
 @router.get("/{project_id}", response_model=dict)
 def get_project(
     project_id: UUID,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -60,8 +53,10 @@ def get_project(
 @router.post("", response_model=dict, status_code=201)
 def create_project(
     payload: ProjectCreate,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
+    if user["auth_type"] == "jwt":
+        payload.user_id = user["user_id"]
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -86,7 +81,7 @@ def create_project(
 def update_project(
     project_id: UUID,
     payload: ProjectUpdate,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     fields = []
     values = []
@@ -125,7 +120,7 @@ def update_project(
 @router.delete("/{project_id}")
 def delete_project(
     project_id: UUID,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> Response:
     with get_db() as conn:
         with conn.cursor() as cur:

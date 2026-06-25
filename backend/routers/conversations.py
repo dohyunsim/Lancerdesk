@@ -4,35 +4,28 @@ import json
 from uuid import UUID
 
 import psycopg2.extras
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from fastapi.security.api_key import APIKeyHeader
 
-from backend.config import API_KEY
+from backend.dependencies import get_current_user
 from backend.models.conversation import ConversationCreate, ConversationUpdate, MessageAppend
 from backend.services.db import get_db
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=True)
-
-
-def verify_api_key(key: str = Security(api_key_header)) -> str:
-    if key != API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-    return key
 
 
 @router.get("", response_model=list[dict])
 def list_conversations(
     user_id: str | None = None,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> list[dict]:
+    effective_user_id = user["user_id"] if user["auth_type"] == "jwt" else user_id
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if user_id:
+            if effective_user_id:
                 cur.execute(
                     "SELECT * FROM conversations WHERE user_id = %s ORDER BY created_at DESC",
-                    (user_id,),
+                    (effective_user_id,),
                 )
             else:
                 cur.execute("SELECT * FROM conversations ORDER BY created_at DESC")
@@ -42,7 +35,7 @@ def list_conversations(
 @router.get("/{conversation_id}", response_model=dict)
 def get_conversation(
     conversation_id: UUID,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -56,8 +49,10 @@ def get_conversation(
 @router.post("", response_model=dict, status_code=201)
 def create_conversation(
     payload: ConversationCreate,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
+    if user["auth_type"] == "jwt":
+        payload.user_id = user["user_id"]
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -81,7 +76,7 @@ def create_conversation(
 def update_conversation(
     conversation_id: UUID,
     payload: ConversationUpdate,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     fields = []
     values = []
@@ -115,7 +110,7 @@ def update_conversation(
 def append_message(
     conversation_id: UUID,
     payload: MessageAppend,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -140,7 +135,7 @@ def append_message(
 @router.delete("/{conversation_id}")
 def delete_conversation(
     conversation_id: UUID,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> Response:
     with get_db() as conn:
         with conn.cursor() as cur:

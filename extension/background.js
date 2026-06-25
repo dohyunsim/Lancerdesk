@@ -4,15 +4,13 @@
 const API_BASE_URL = "https://backend-production-53b3f.up.railway.app";
 
 /**
- * Retrieve stored API key from chrome.storage.sync.
+ * Retrieve stored JWT token from chrome.storage.local.
  * @returns {Promise<string>}
  */
-async function getApiKey() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(["apiKey"], (result) => {
-      resolve(result.apiKey || "");
-    });
-  });
+async function getJwtToken() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get(["jwtToken"], (r) => resolve(r.jwtToken || ""))
+  );
 }
 
 /**
@@ -22,13 +20,13 @@ async function getApiKey() {
  * @returns {Promise<any>}
  */
 async function apiRequest(path, options = {}) {
-  const apiKey = await getApiKey();
+  const token = await getJwtToken();
   const url = `${API_BASE_URL}${path}`;
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
@@ -48,12 +46,12 @@ async function apiRequest(path, options = {}) {
  */
 async function saveConversation(chatData) {
   const stored = await new Promise((resolve) => {
-    chrome.storage.local.get(["userId", "currentConversationId"], resolve);
+    chrome.storage.local.get(["currentConversationId"], resolve);
   });
 
-  const userId = stored.userId;
-  if (!userId) {
-    console.warn("[Lancerdesk] No userId stored. Set it via the sidepanel.");
+  const token = await getJwtToken();
+  if (!token) {
+    console.warn("[Lancerdesk] No JWT token stored. Please log in via the sidepanel.");
     return null;
   }
 
@@ -75,7 +73,6 @@ async function saveConversation(chatData) {
   const conversation = await apiRequest("/conversations", {
     method: "POST",
     body: JSON.stringify({
-      user_id: userId,
       soomgo_url: chatData.url,
       category: chatData.category,
       messages: chatData.messages,
@@ -138,20 +135,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (type === "SET_USER_ID") {
-    chrome.storage.local.set({ userId: payload.userId }, () => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-
-  if (type === "SET_API_KEY") {
-    chrome.storage.sync.set({ apiKey: payload.apiKey }, () => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-
   if (type === "GET_CURRENT_CONVERSATION") {
     chrome.storage.local.get(["currentConversationId"], (result) => {
       sendResponse({ conversationId: result.currentConversationId || null });
@@ -160,10 +143,46 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (type === "FETCH_CONVERSATIONS") {
-    const { userId } = payload;
-    apiRequest(`/conversations?user_id=${userId}`)
+    apiRequest(`/conversations`)
       .then((data) => sendResponse({ success: true, data }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (type === "LOGIN") {
+    const { email, password } = payload;
+    fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.access_token) {
+          chrome.storage.local.set({
+            jwtToken: data.access_token,
+            userId: data.user.id,
+            userEmail: data.user.email,
+          });
+          sendResponse({ success: true, user: data.user });
+        } else {
+          sendResponse({ success: false, error: data.detail || "로그인 실패" });
+        }
+      })
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (type === "LOGOUT") {
+    chrome.storage.local.remove(["jwtToken", "userId", "userEmail", "currentConversationId"]);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (type === "GET_AUTH_STATE") {
+    chrome.storage.local.get(["jwtToken", "userEmail"], (result) => {
+      sendResponse({ isLoggedIn: !!result.jwtToken, email: result.userEmail || null });
+    });
     return true;
   }
 });

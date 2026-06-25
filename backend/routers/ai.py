@@ -1,28 +1,20 @@
 from __future__ import annotations
 
 import psycopg2.extras
-from fastapi import APIRouter, Depends, HTTPException, Security
-from fastapi.security.api_key import APIKeyHeader
+from fastapi import APIRouter, Depends, HTTPException
 
-from backend.config import API_KEY
+from backend.dependencies import get_current_user
 from backend.models.ai import AISuggestRequest, AISuggestResponse
 from backend.services.claude import generate_reply_suggestion
 from backend.services.db import get_db
 
 router = APIRouter(prefix="/ai", tags=["ai"])
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=True)
-
-
-def verify_api_key(key: str = Security(api_key_header)) -> str:
-    if key != API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API key")
-    return key
 
 
 @router.post("/suggest", response_model=AISuggestResponse)
 def suggest_reply(
     payload: AISuggestRequest,
-    _: str = Depends(verify_api_key),
+    user: dict = Depends(get_current_user),
 ) -> AISuggestResponse:
     try:
         suggestion = generate_reply_suggestion(

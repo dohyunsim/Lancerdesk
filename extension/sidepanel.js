@@ -1,9 +1,15 @@
 // Lancerdesk Side Panel Script
 
 // ─── DOM refs ───────────────────────────────────────────────────────────────
-const apiKeyInput = document.getElementById("api-key-input");
-const userIdInput = document.getElementById("user-id-input");
-const saveSettingsBtn = document.getElementById("save-settings-btn");
+const loginSection = document.getElementById("login-section");
+const userSection = document.getElementById("user-section");
+const emailInput = document.getElementById("email-input");
+const passwordInput = document.getElementById("password-input");
+const loginBtn = document.getElementById("login-btn");
+const loginError = document.getElementById("login-error");
+const userEmailDisplay = document.getElementById("user-email-display");
+const logoutBtn = document.getElementById("logout-btn");
+
 const statusDot = document.getElementById("status-dot");
 
 const chatCategory = document.getElementById("chat-category");
@@ -42,34 +48,54 @@ function clearError() {
   aiError.classList.add("hidden");
 }
 
-// ─── Settings ────────────────────────────────────────────────────────────────
-async function loadSettings() {
-  chrome.storage.sync.get(["apiKey"], (result) => {
-    if (result.apiKey) apiKeyInput.value = result.apiKey;
-  });
-  chrome.storage.local.get(["userId"], (result) => {
-    if (result.userId) userIdInput.value = result.userId;
+// ─── Auth ────────────────────────────────────────────────────────────────────
+function checkAuthState() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
+      if (res?.isLoggedIn) {
+        loginSection.classList.add("hidden");
+        userSection.classList.remove("hidden");
+        userEmailDisplay.textContent = res.email || "";
+        setStatus("active");
+      } else {
+        loginSection.classList.remove("hidden");
+        userSection.classList.add("hidden");
+        setStatus("idle");
+      }
+      resolve(res?.isLoggedIn || false);
+    });
   });
 }
 
-saveSettingsBtn.addEventListener("click", () => {
-  const apiKey = apiKeyInput.value.trim();
-  const userId = userIdInput.value.trim();
-
-  if (!apiKey || !userId) {
-    showError("API 키와 User ID를 모두 입력해주세요.");
+loginBtn.addEventListener("click", () => {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+  if (!email || !password) {
+    loginError.textContent = "이메일과 비밀번호를 입력해주세요.";
+    loginError.classList.remove("hidden");
     return;
   }
+  loginError.classList.add("hidden");
+  loginBtn.disabled = true;
+  loginBtn.textContent = "로그인 중...";
+  chrome.runtime.sendMessage({ type: "LOGIN", payload: { email, password } }, (res) => {
+    loginBtn.disabled = false;
+    loginBtn.textContent = "로그인";
+    if (res?.success) {
+      checkAuthState().then(() => loadConversations());
+    } else {
+      loginError.textContent = res?.error || "로그인 실패";
+      loginError.classList.remove("hidden");
+    }
+  });
+});
 
-  clearError();
-  chrome.runtime.sendMessage({ type: "SET_API_KEY", payload: { apiKey } });
-  chrome.runtime.sendMessage({ type: "SET_USER_ID", payload: { userId } });
-
-  setStatus("active");
-  saveSettingsBtn.textContent = "저장됨 ✓";
-  setTimeout(() => {
-    saveSettingsBtn.textContent = "설정 저장";
-  }, 2000);
+logoutBtn.addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "LOGOUT" }, () => {
+    checkAuthState();
+    conversationList.innerHTML = '<li class="empty-msg">로그인이 필요합니다.</li>';
+    projectSelect && (projectSelect.innerHTML = '<option value="">-- 프로젝트 선택 --</option>');
+  });
 });
 
 // ─── Chat data from content script ───────────────────────────────────────────
@@ -169,18 +195,20 @@ copyBtn.addEventListener("click", () => {
 
 // ─── Conversation List ────────────────────────────────────────────────────────
 async function loadConversations() {
-  const { userId } = await new Promise((resolve) =>
-    chrome.storage.local.get(["userId"], resolve)
-  );
+  const isLoggedIn = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
+      resolve(res?.isLoggedIn || false);
+    });
+  });
 
-  if (!userId) {
+  if (!isLoggedIn) {
     conversationList.innerHTML =
-      '<li class="empty-msg">User ID를 설정해주세요.</li>';
+      '<li class="empty-msg">로그인이 필요합니다.</li>';
     return;
   }
 
   chrome.runtime.sendMessage(
-    { type: "FETCH_CONVERSATIONS", payload: { userId } },
+    { type: "FETCH_CONVERSATIONS" },
     (response) => {
       if (!response?.success || !response.data?.length) {
         conversationList.innerHTML =
@@ -207,7 +235,7 @@ refreshBtn.addEventListener("click", loadConversations);
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
-  await loadSettings();
+  await checkAuthState();
   await fetchChatData();
   await loadConversations();
 
