@@ -19,10 +19,20 @@ const chatMessageCount = document.getElementById("chat-message-count");
 
 const crawlBtn = document.getElementById("crawl-btn");
 const crawlStatus = document.getElementById("crawl-status");
-const refToggle = document.getElementById("ref-toggle");
+
+const refOpenBtn = document.getElementById("ref-open-btn");
 const refToggleCount = document.getElementById("ref-toggle-count");
-const refPanel = document.getElementById("ref-panel");
-const refList = document.getElementById("ref-list");
+
+// 오버레이
+const refOverlay = document.getElementById("ref-overlay");
+const refOverlayPanel = document.getElementById("ref-overlay-panel");
+const refOverlayClose = document.getElementById("ref-overlay-close");
+const refOverlayList = document.getElementById("ref-overlay-list");
+const refSelectedInfo = document.getElementById("ref-selected-info");
+const refSelectAllBtn = document.getElementById("ref-select-all-btn");
+const refSelectLast10Btn = document.getElementById("ref-select-last10-btn");
+const refSelectLast5Btn = document.getElementById("ref-select-last5-btn");
+const refConfirmBtn = document.getElementById("ref-confirm-btn");
 
 const styleList = document.getElementById("style-list");
 const addStyleBtn = document.getElementById("add-style-btn");
@@ -39,13 +49,13 @@ const copyBtn = document.getElementById("copy-btn");
 const aiLoading = document.getElementById("ai-loading");
 const aiError = document.getElementById("ai-error");
 
-const refreshBtn = document.getElementById("refresh-btn");
 const conversationList = document.getElementById("conversation-list");
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let currentChatData = null;
 let currentConversationId = null;
 let selectedStyleId = null;
+let selectedMessageIndices = null; // null = 전체, Set<number> = 선택된 인덱스
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function setStatus(state) {
@@ -111,43 +121,46 @@ logoutBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "LOGOUT" }, () => {
     checkAuthState();
     conversationList.innerHTML = '<li class="empty-msg">로그인이 필요합니다.</li>';
-    projectSelect && (projectSelect.innerHTML = '<option value="">-- 프로젝트 선택 --</option>');
   });
 });
 
 // ─── Chat data from content script ───────────────────────────────────────────
-function renderRefMessages(messages) {
-  const last10 = messages.slice(-10);
-  refToggleCount.textContent = `${last10.length}개`;
-  refList.innerHTML = last10
-    .map((m) => {
-      const role = m.role === "freelancer" ? "freelancer" : "client";
-      const label = role === "freelancer" ? "나" : "고객";
-      return `<li class="ref-msg ref-msg-${role}">
-        <span class="ref-msg-label">${label}</span>
-        <span class="ref-msg-content">${m.content}</span>
-      </li>`;
-    })
-    .join("");
-}
-
 function updateChatMeta(data) {
   currentChatData = data;
   chatClientId.textContent = `고객 ID: ${data.clientId || "-"}`;
   chatClientName.textContent = `고객명: ${data.clientName || "-"}`;
   chatCategory.textContent = `카테고리: ${data.domCategory || data.category}`;
   chatMessageCount.textContent = `메시지 수: ${data.messages.length}`;
-  renderRefMessages(data.messages);
+  refToggleCount.textContent = `${data.messages.length}개`;
+  // 새 대화 데이터가 오면 선택 범위 초기화
+  selectedMessageIndices = null;
   setStatus("active");
 }
 
-// AI 참고 대화 토글
-refToggle.addEventListener("click", () => {
-  const isHidden = refPanel.classList.toggle("hidden");
-  refToggle.querySelector(".ref-arrow").textContent = isHidden ? "▼" : "▲";
+async function fetchChatData() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+  chrome.tabs.sendMessage(tab.id, { type: "GET_CHAT_DATA" }, (response) => {
+    if (chrome.runtime.lastError) return;
+    if (response?.success && response.data) {
+      updateChatMeta(response.data);
+    }
+  });
+}
+
+// 실시간 업데이트 수신
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === "CHAT_UPDATED" && message.payload) {
+    updateChatMeta(message.payload);
+    chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
+      if (res?.conversationId) currentConversationId = res.conversationId;
+    });
+    // 대화창 진입 감지 → 히스토리처럼 자동 목록 갱신
+    setTimeout(() => loadConversations(), 1500);
+  }
 });
 
-// 처음부터 대화 불러오기
+// ─── 처음부터 크롤링 ──────────────────────────────────────────────────────────
 crawlBtn.addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
@@ -162,42 +175,99 @@ crawlBtn.addEventListener("click", async () => {
     if (res?.success && res.data) {
       updateChatMeta(res.data);
       crawlStatus.textContent = `완료: ${res.data.messages.length}개 메시지 로드됨`;
-      setTimeout(() => crawlStatus.classList.add("hidden"), 3000);
     } else {
-      crawlStatus.textContent = "불러오기 실패 — 숨고 채팅 페이지인지 확인해주세요";
-      setTimeout(() => crawlStatus.classList.add("hidden"), 3000);
+      crawlStatus.textContent = "실패 — 숨고 채팅 페이지인지 확인해주세요";
     }
+    setTimeout(() => crawlStatus.classList.add("hidden"), 3000);
   });
 });
 
-// Ask content script for current chat data
-async function fetchChatData() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return;
-
-  chrome.tabs.sendMessage(tab.id, { type: "GET_CHAT_DATA" }, (response) => {
-    if (chrome.runtime.lastError) return;
-    if (response?.success && response.data) {
-      updateChatMeta(response.data);
-    }
-  });
+// ─── AI 참고 대화 오버레이 ────────────────────────────────────────────────────
+function openRefOverlay() {
+  renderOverlayMessages();
+  refOverlay.classList.remove("hidden");
+  // 두 프레임 후 open 클래스 추가 → CSS transition 트리거
+  requestAnimationFrame(() => requestAnimationFrame(() => refOverlay.classList.add("open")));
 }
 
-// Listen for live updates pushed by the content script
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "CHAT_UPDATED" && message.payload) {
-    updateChatMeta(message.payload);
+function closeRefOverlay() {
+  refOverlay.classList.remove("open");
+  setTimeout(() => refOverlay.classList.add("hidden"), 320);
+}
 
-    // Get the cached conversation ID
-    chrome.runtime.sendMessage(
-      { type: "GET_CURRENT_CONVERSATION" },
-      (res) => {
-        if (res?.conversationId) {
-          currentConversationId = res.conversationId;
-        }
-      }
-    );
+function updateSelectedInfo() {
+  const total = currentChatData?.messages?.length || 0;
+  const count = selectedMessageIndices !== null ? selectedMessageIndices.size : total;
+  refSelectedInfo.textContent = `${count}개 선택`;
+  refConfirmBtn.textContent = `이 범위(${count}개)로 AI 답변 받기`;
+}
+
+function renderOverlayMessages() {
+  const messages = currentChatData?.messages || [];
+  if (selectedMessageIndices === null) {
+    selectedMessageIndices = new Set(messages.map((_, i) => i));
   }
+
+  refOverlayList.innerHTML = messages
+    .map((m, i) => {
+      const isFreelancer = m.role === "freelancer";
+      const label = isFreelancer ? "나" : "고객";
+      const checked = selectedMessageIndices.has(i) ? "checked" : "";
+      const preview = (m.content || "").slice(0, 60) + (m.content?.length > 60 ? "…" : "");
+      return `
+        <li class="ref-ol-item${isFreelancer ? " ref-ol-freelancer" : ""}">
+          <label class="ref-ol-label-wrap">
+            <input type="checkbox" class="ref-checkbox" data-index="${i}" ${checked} />
+            <span class="ref-ol-role">${label}</span>
+            <span class="ref-ol-text">${preview}</span>
+          </label>
+        </li>`;
+    })
+    .join("");
+
+  refOverlayList.querySelectorAll(".ref-checkbox").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const idx = parseInt(cb.dataset.index, 10);
+      if (cb.checked) selectedMessageIndices.add(idx);
+      else selectedMessageIndices.delete(idx);
+      updateSelectedInfo();
+    });
+  });
+
+  updateSelectedInfo();
+}
+
+refOpenBtn.addEventListener("click", openRefOverlay);
+refOverlayClose.addEventListener("click", closeRefOverlay);
+
+// 백드롭 클릭 시 닫기
+refOverlay.addEventListener("click", (e) => {
+  if (e.target === refOverlay) closeRefOverlay();
+});
+
+// 빠른 선택 버튼
+refSelectAllBtn.addEventListener("click", () => {
+  const msgs = currentChatData?.messages || [];
+  selectedMessageIndices = new Set(msgs.map((_, i) => i));
+  renderOverlayMessages();
+});
+refSelectLast10Btn.addEventListener("click", () => {
+  const msgs = currentChatData?.messages || [];
+  const from = Math.max(0, msgs.length - 10);
+  selectedMessageIndices = new Set(msgs.slice(from).map((_, i) => from + i));
+  renderOverlayMessages();
+});
+refSelectLast5Btn.addEventListener("click", () => {
+  const msgs = currentChatData?.messages || [];
+  const from = Math.max(0, msgs.length - 5);
+  selectedMessageIndices = new Set(msgs.slice(from).map((_, i) => from + i));
+  renderOverlayMessages();
+});
+
+// 확인 버튼 → 오버레이 닫고 AI 생성
+refConfirmBtn.addEventListener("click", () => {
+  closeRefOverlay();
+  getSuggestionBtn.click();
 });
 
 // ─── AI Suggestion ───────────────────────────────────────────────────────────
@@ -208,10 +278,12 @@ getSuggestionBtn.addEventListener("click", async () => {
   }
 
   if (!currentConversationId) {
-    // Try to get the ID one more time
-    chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
-      currentConversationId = res?.conversationId || null;
-    });
+    await new Promise((resolve) =>
+      chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
+        currentConversationId = res?.conversationId || null;
+        resolve();
+      })
+    );
   }
 
   if (!currentConversationId) {
@@ -224,16 +296,22 @@ getSuggestionBtn.addEventListener("click", async () => {
   aiLoading.classList.remove("hidden");
   getSuggestionBtn.disabled = true;
 
+  // 선택된 메시지만 필터링 (null이면 전체)
+  const allMsgs = currentChatData.messages;
+  const messagesToSend = selectedMessageIndices !== null
+    ? allMsgs.filter((_, i) => selectedMessageIndices.has(i))
+    : allMsgs;
+
   const styles = await loadStyles();
-  const selected = styles.find((s) => s.id === selectedStyleId);
-  const stylePrompt = selected ? selected.prompt : "";
+  const selectedStyle = styles.find((s) => s.id === selectedStyleId);
+  const stylePrompt = selectedStyle ? selectedStyle.prompt : "";
 
   chrome.runtime.sendMessage(
     {
       type: "GET_AI_SUGGESTION",
       payload: {
         conversationId: currentConversationId,
-        messages: currentChatData.messages,
+        messages: messagesToSend,
         category: currentChatData.category,
         stylePrompt,
       },
@@ -241,7 +319,6 @@ getSuggestionBtn.addEventListener("click", async () => {
     (response) => {
       aiLoading.classList.add("hidden");
       getSuggestionBtn.disabled = false;
-
       if (response?.success) {
         suggestionText.textContent = response.suggestion;
         suggestionBox.classList.remove("hidden");
@@ -274,9 +351,7 @@ async function hideConvId(id) {
 
 async function loadConversations() {
   const isLoggedIn = await new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
-      resolve(res?.isLoggedIn || false);
-    });
+    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => resolve(res?.isLoggedIn || false));
   });
 
   if (!isLoggedIn) {
@@ -291,8 +366,6 @@ async function loadConversations() {
     }
 
     const hidden = await getHiddenConvIds();
-
-    // 같은 soomgo_url은 하나로 (가장 최신 유지), 숨긴 항목 제거
     const seen = new Set();
     const deduped = response.data.filter((conv) => {
       if (hidden.includes(conv.id)) return false;
@@ -332,7 +405,6 @@ async function loadConversations() {
       })
       .join("");
 
-    // 숨고 URL 클릭 이동 (delete/dash 버튼 제외)
     conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
       item.addEventListener("click", (e) => {
         if (e.target.classList.contains("conv-delete-btn") ||
@@ -345,7 +417,6 @@ async function loadConversations() {
       });
     });
 
-    // X 버튼 → 로컬에서 숨기기
     conversationList.querySelectorAll(".conv-delete-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -355,8 +426,6 @@ async function loadConversations() {
     });
   });
 }
-
-refreshBtn.addEventListener("click", loadConversations);
 
 // ─── Reply Styles ─────────────────────────────────────────────────────────────
 const DEFAULT_STYLES = [

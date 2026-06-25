@@ -54,15 +54,14 @@
       </button>
       <div id="crawl-status" class="crawl-status hidden"></div>
 
-      <!-- AI 참고 대화 토글 -->
-      <div id="ref-toggle" class="ref-toggle">
-        <span id="ref-toggle-label">AI가 참고 중인 대화</span>
+      <!-- AI 참고 대화 버튼 -->
+      <button id="ref-open-btn" class="ref-open-btn">
+        <span>💬 AI 참고 대화</span>
         <span id="ref-toggle-count" class="ref-count">0개</span>
-        <span class="ref-arrow">▼</span>
-      </div>
-      <div id="ref-panel" class="ref-panel hidden">
-        <ul id="ref-list" class="ref-list"></ul>
-      </div>
+        <span class="ref-open-arrow">›</span>
+      </button>
+
+      <!-- 답변 스타일 -->
       <div id="style-section" style="margin-top:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;">답변 스타일</span>
@@ -84,6 +83,7 @@
           </div>
         </div>
       </div>
+
       <button id="get-suggestion-btn" class="btn btn-accent">
         AI 답변 추천 받기
       </button>
@@ -100,14 +100,31 @@
 
     <!-- Recent Conversations Section -->
     <section id="conversations-section" class="section">
-      <div class="section-header">
-        <h2 class="section-title">최근 대화 목록</h2>
-        <button id="refresh-btn" class="btn btn-outline btn-sm">새로고침</button>
-      </div>
+      <h2 class="section-title">최근 대화 목록</h2>
       <ul id="conversation-list" class="conversation-list">
         <li class="empty-msg">대화가 없습니다.</li>
       </ul>
     </section>
+  </div>
+
+  <!-- AI 참고 대화 오버레이 -->
+  <div id="ref-overlay" class="ref-overlay hidden">
+    <div id="ref-overlay-panel" class="ref-overlay-panel">
+      <div class="ref-overlay-header">
+        <span class="ref-overlay-title">AI 참고 대화 설정</span>
+        <button id="ref-overlay-close" class="ref-overlay-close">✕</button>
+      </div>
+      <div class="ref-overlay-actions">
+        <button id="ref-select-all-btn" class="btn btn-outline btn-sm">전체</button>
+        <button id="ref-select-last10-btn" class="btn btn-outline btn-sm">최근 10개</button>
+        <button id="ref-select-last5-btn" class="btn btn-outline btn-sm">최근 5개</button>
+        <span id="ref-selected-info" class="ref-selected-info">0개 선택</span>
+      </div>
+      <ul id="ref-overlay-list" class="ref-overlay-list"></ul>
+      <div class="ref-overlay-footer">
+        <button id="ref-confirm-btn" class="btn btn-accent">이 범위로 AI 답변 받기</button>
+      </div>
+    </div>
   </div>
 
   <script src="sidepanel.js"></script>
