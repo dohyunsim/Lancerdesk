@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Lancerdesk",
   "version": "1.0.0",
-  "description": "AI-powered CRM for soomgo.com freelancers",
+  "description": "숨고 프리랜서를 위한 AI 상담 보조 도구",
   "permissions": [
     "activeTab",
     "storage",
@@ -12,7 +12,7 @@
   "host_permissions": [
     "https://soomgo.com/*",
     "https://*.soomgo.com/*",
-    "http://localhost:8000/*"
+    "https://your-railway-app.railway.app/*"
   ],
   "background": {
     "service_worker": "background.js",

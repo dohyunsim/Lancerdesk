@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import ai, analytics, conversations, health, projects
+from backend.routers import ai, analytics, conversations, health, projects, auth
 
 app = FastAPI(
     title="Lancerdesk API",
@@ -16,6 +16,8 @@ app.add_middleware(
         "chrome-extension://*",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://lancerdesk.vercel.app",
+        "https://*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -24,6 +26,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(conversations.router)
 app.include_router(projects.router)
 app.include_router(ai.router)
