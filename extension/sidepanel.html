@@ -29,11 +29,9 @@
       <div id="login-error" class="error-msg hidden" style="color:#ef4444;font-size:0.75rem;margin-top:0.5rem;"></div>
     </section>
 
-    <section id="user-section" class="section hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
-        <span id="user-email-display" style="font-size:0.75rem;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-        <button id="logout-btn" class="btn" style="font-size:0.7rem;padding:0.25rem 0.5rem;flex-shrink:0;">로그아웃</button>
-      </div>
+    <!-- 로그인 상태: 우측 하단 프로필 버튼 -->
+    <section id="user-section" class="section hidden" style="display:none;">
+      <!-- 실제 표시는 하단 고정 버튼으로 -->
     </section>
 
     <hr class="divider" />
@@ -53,13 +51,6 @@
         📜 처음부터 대화 불러오기
       </button>
       <div id="crawl-status" class="crawl-status hidden"></div>
-
-      <!-- AI 참고 대화 버튼 -->
-      <button id="ref-open-btn" class="ref-open-btn">
-        <span>💬 AI 참고 대화</span>
-        <span id="ref-toggle-count" class="ref-count">0개</span>
-        <span class="ref-open-arrow">›</span>
-      </button>
 
       <!-- 답변 스타일 -->
       <div id="style-section" style="margin-top:10px;">
@@ -105,22 +96,58 @@
         <li class="empty-msg">대화가 없습니다.</li>
       </ul>
     </section>
+
+    <!-- 하단 여백 (하단 고정 버튼들과 겹치지 않게) -->
+    <div style="height:64px;"></div>
   </div>
 
-  <!-- AI 참고 대화 오버레이 -->
+  <!-- 하단 중앙 고정: AI 참고 대화 버튼 -->
+  <div id="bottom-bar" class="bottom-bar">
+    <button id="ref-open-btn" class="ref-fab">
+      <span>💬 AI 참고 대화</span>
+      <span id="ref-toggle-count" class="ref-count">0개</span>
+    </button>
+  </div>
+
+  <!-- 우측 하단 고정: 프로필/로그아웃 -->
+  <div id="profile-fab-wrap" class="profile-fab-wrap hidden">
+    <div id="profile-fab-menu" class="profile-fab-menu hidden">
+      <span id="user-email-display" class="fab-email"></span>
+      <button id="logout-btn" class="btn btn-outline btn-sm" style="margin-top:6px;">로그아웃</button>
+    </div>
+    <button id="profile-fab" class="profile-fab" title="프로필">👤</button>
+  </div>
+
+  <!-- AI 참고 대화 오버레이 (바텀시트) -->
   <div id="ref-overlay" class="ref-overlay hidden">
     <div id="ref-overlay-panel" class="ref-overlay-panel">
       <div class="ref-overlay-header">
-        <span class="ref-overlay-title">AI 참고 대화 설정</span>
+        <span class="ref-overlay-title">AI 참고 대화 범위 설정</span>
         <button id="ref-overlay-close" class="ref-overlay-close">✕</button>
       </div>
-      <div class="ref-overlay-actions">
-        <button id="ref-select-all-btn" class="btn btn-outline btn-sm">전체</button>
-        <button id="ref-select-last10-btn" class="btn btn-outline btn-sm">최근 10개</button>
-        <button id="ref-select-last5-btn" class="btn btn-outline btn-sm">최근 5개</button>
-        <span id="ref-selected-info" class="ref-selected-info">0개 선택</span>
+
+      <!-- 범위 슬라이더 -->
+      <div class="ref-range-section">
+        <div class="ref-range-labels">
+          <span id="ref-range-start-label">시작: 1번</span>
+          <span id="ref-range-info" class="ref-selected-info">0개 선택</span>
+          <span id="ref-range-end-label">끝: -번</span>
+        </div>
+        <div class="ref-range-track-wrap">
+          <input type="range" id="ref-range-start" class="ref-range-input" min="1" max="1" value="1" />
+          <input type="range" id="ref-range-end"   class="ref-range-input" min="1" max="1" value="1" />
+        </div>
+        <div class="ref-range-quick">
+          <button id="ref-select-all-btn"    class="btn btn-outline btn-sm">전체</button>
+          <button id="ref-select-last20-btn" class="btn btn-outline btn-sm">최근 20개</button>
+          <button id="ref-select-last10-btn" class="btn btn-outline btn-sm">최근 10개</button>
+          <button id="ref-select-last5-btn"  class="btn btn-outline btn-sm">최근 5개</button>
+        </div>
       </div>
+
+      <!-- 미리보기 목록 -->
       <ul id="ref-overlay-list" class="ref-overlay-list"></ul>
+
       <div class="ref-overlay-footer">
         <button id="ref-confirm-btn" class="btn btn-accent">이 범위로 AI 답변 받기</button>
       </div>

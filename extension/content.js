@@ -137,73 +137,101 @@ function extractClientInfo() {
 
 /**
  * Scrape chat messages from the current soomgo.com chat page.
- * @returns {{ messages: Array, url: string, category: string, clientId: string|null, clientName: string|null } | null}
+ * TreeWalker + 화면 위치 기반 파싱:
+ *  - 아바타 이니셜(1-2자), 타임스탬프, 날짜 구분선, 시스템 메시지 자동 제외
+ *  - 채팅 컨테이너 내 상대적 위치로 client(좌) / freelancer(우) 판별
+ *  - 같은 버블 내 연속 텍스트 노드는 합산
  */
 function scrapeChatMessages() {
-  // soomgo.com uses various selectors — try common patterns
-  const messageSelectors = [
-    "[class*='Message']",
-    "[class*='message']",
-    "[class*='chat-bubble']",
-    "[class*='bubble']",
-    "[class*='chat']",
-    "[data-testid*='message']",
-    ".conversation-message",
-    ".chat-message",
-  ];
-
-  let messageElements = [];
-  for (const selector of messageSelectors) {
-    const found = document.querySelectorAll(selector);
-    if (found.length > 0) {
-      messageElements = Array.from(found);
-      break;
-    }
-  }
-
   const { clientId, clientName, domCategory } = extractClientInfo();
 
-  if (messageElements.length === 0) {
-    // 메시지 셀렉터 매칭 실패해도 URL·고객 정보는 반환
-    return {
-      messages: [],
-      url: window.location.href,
-      category: "general",
-      clientId,
-      clientName,
-      domCategory,
-    };
+  const TIME_RE     = /오[전후]\s*\d{1,2}:\d{2}/g;
+  const DATE_RE     = /^\d{4}년\s*\d{1,2}월\s*\d{1,2}일/;
+  const AVATAR_RE   = /^[가-힣A-Za-z]{1,2}$/; // 아바타 이니셜 (1~2자)
+
+  // 채팅 스크롤 컨테이너 탐색: 스크롤 가능하고 좌측에 위치한 큰 요소
+  let chatContainer = document.body;
+  {
+    const candidates = Array.from(document.querySelectorAll("*")).filter((el) => {
+      const tag = el.tagName;
+      if (tag === "SCRIPT" || tag === "STYLE" || tag === "HEAD") return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 250 && r.height > 200 &&
+             r.left < window.innerWidth * 0.85 &&
+             el.scrollHeight > el.clientHeight + 80;
+    });
+    candidates.sort((a, b) => b.scrollHeight - a.scrollHeight);
+    if (candidates.length) chatContainer = candidates[0];
   }
 
-  const messages = messageElements.map((el) => {
-    const classList = el.className || "";
-    const isMine =
-      classList.includes("mine") ||
-      classList.includes("sent") ||
-      classList.includes("my-") ||
-      classList.includes("Me") ||
-      classList.includes("right") ||
-      el.dataset.sender === "me";
+  const cRect   = chatContainer.getBoundingClientRect();
+  const cLeft   = cRect.left || 0;
+  const cWidth  = cRect.width  || 700;
 
-    const textEl =
-      el.querySelector("[class*='text']") ||
-      el.querySelector("[class*='content']") ||
-      el.querySelector("[class*='body']") ||
-      el.querySelector("p") ||
-      el;
+  const messages = [];
+  const seen     = new Set();
+  let   prevRect = null;
 
-    return {
-      role: isMine ? "freelancer" : "client",
-      content: (textEl.textContent || "").trim(),
-      timestamp: el.dataset.time || el.getAttribute("data-time") || new Date().toISOString(),
-    };
-  }).filter((m) => m.content.length > 0);
+  const walker = document.createTreeWalker(chatContainer, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    let text = (node.textContent || "").trim();
+    if (!text) continue;
 
-  const fullText = messages.map((m) => m.content).join(" ");
+    // 타임스탬프를 텍스트에서 제거 후 나머지 평가
+    text = text.replace(TIME_RE, "").trim();
+    if (!text || text.length < 2) continue;
+
+    if (AVATAR_RE.test(text)) continue;  // 아바타 이니셜
+    if (DATE_RE.test(text))   continue;  // 날짜 구분선
+
+    const el = node.parentElement;
+    if (!el || !chatContainer.contains(el)) continue;
+
+    const r = el.getBoundingClientRect();
+    if (!r.width || r.height < 5) continue;
+
+    // 전체 너비의 65% 이상 = 시스템 메시지 / 배너 → 제외
+    if (r.width > cWidth * 0.65) continue;
+
+    // 채팅 컨테이너 내 상대적 중앙 X 좌표로 역할 결정
+    const relCx = (r.left + r.width / 2 - cLeft) / cWidth;
+    if (relCx > 0.42 && relCx < 0.58) continue; // 가운데 = 시스템 메시지
+    const role = relCx < 0.5 ? "client" : "freelancer";
+
+    // 중복 제거
+    const key = `${role}|${text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // 같은 버블 내 연속 텍스트(세로 40px 이내, 같은 역할) → 합산
+    const last = messages[messages.length - 1];
+    const inSameBubble =
+      last &&
+      last.role === role &&
+      prevRect &&
+      Math.abs(r.top - prevRect.top) < 40 &&
+      Math.abs(r.bottom - prevRect.bottom) < 40;
+
+    if (inSameBubble) {
+      last.content += " " + text;
+    } else {
+      messages.push({ role, content: text, timestamp: "" });
+    }
+    prevRect = r;
+  }
+
+  const cleaned = messages.filter((m) => m.content.trim().length > 1);
+
+  if (!cleaned.length) {
+    return { messages: [], url: window.location.href, category: "general", clientId, clientName, domCategory };
+  }
+
+  const fullText = cleaned.map((m) => m.content).join(" ");
   const category = domCategory ? detectCategoryFromLabel(domCategory) : detectCategory(fullText);
 
   return {
-    messages,
+    messages: cleaned,
     url: window.location.href,
     category,
     clientId,

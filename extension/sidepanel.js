@@ -1,61 +1,70 @@
 // Lancerdesk Side Panel Script
 
 // ─── DOM refs ───────────────────────────────────────────────────────────────
-const loginSection = document.getElementById("login-section");
-const userSection = document.getElementById("user-section");
-const emailInput = document.getElementById("email-input");
-const passwordInput = document.getElementById("password-input");
-const loginBtn = document.getElementById("login-btn");
-const loginError = document.getElementById("login-error");
-const userEmailDisplay = document.getElementById("user-email-display");
-const logoutBtn = document.getElementById("logout-btn");
+const loginSection       = document.getElementById("login-section");
+const emailInput         = document.getElementById("email-input");
+const passwordInput      = document.getElementById("password-input");
+const loginBtn           = document.getElementById("login-btn");
+const loginError         = document.getElementById("login-error");
 
-const statusDot = document.getElementById("status-dot");
+const statusDot          = document.getElementById("status-dot");
 
-const chatClientId = document.getElementById("chat-client-id");
-const chatClientName = document.getElementById("chat-client-name");
-const chatCategory = document.getElementById("chat-category");
-const chatMessageCount = document.getElementById("chat-message-count");
+const chatClientId       = document.getElementById("chat-client-id");
+const chatClientName     = document.getElementById("chat-client-name");
+const chatCategory       = document.getElementById("chat-category");
+const chatMessageCount   = document.getElementById("chat-message-count");
 
-const crawlBtn = document.getElementById("crawl-btn");
-const crawlStatus = document.getElementById("crawl-status");
+const crawlBtn           = document.getElementById("crawl-btn");
+const crawlStatus        = document.getElementById("crawl-status");
 
-const refOpenBtn = document.getElementById("ref-open-btn");
-const refToggleCount = document.getElementById("ref-toggle-count");
+// 하단 고정 바 / FAB
+const bottomBar          = document.getElementById("bottom-bar");
+const refOpenBtn         = document.getElementById("ref-open-btn");
+const refToggleCount     = document.getElementById("ref-toggle-count");
+const profileFabWrap     = document.getElementById("profile-fab-wrap");
+const profileFab         = document.getElementById("profile-fab");
+const profileFabMenu     = document.getElementById("profile-fab-menu");
+const userEmailDisplay   = document.getElementById("user-email-display");
+const logoutBtn          = document.getElementById("logout-btn");
 
 // 오버레이
-const refOverlay = document.getElementById("ref-overlay");
-const refOverlayPanel = document.getElementById("ref-overlay-panel");
-const refOverlayClose = document.getElementById("ref-overlay-close");
-const refOverlayList = document.getElementById("ref-overlay-list");
-const refSelectedInfo = document.getElementById("ref-selected-info");
-const refSelectAllBtn = document.getElementById("ref-select-all-btn");
+const refOverlay         = document.getElementById("ref-overlay");
+const refOverlayClose    = document.getElementById("ref-overlay-close");
+const refOverlayList     = document.getElementById("ref-overlay-list");
+const refRangeStart      = document.getElementById("ref-range-start");
+const refRangeEnd        = document.getElementById("ref-range-end");
+const refRangeStartLabel = document.getElementById("ref-range-start-label");
+const refRangeEndLabel   = document.getElementById("ref-range-end-label");
+const refRangeInfo       = document.getElementById("ref-range-info");
+const refSelectAllBtn    = document.getElementById("ref-select-all-btn");
+const refSelectLast20Btn = document.getElementById("ref-select-last20-btn");
 const refSelectLast10Btn = document.getElementById("ref-select-last10-btn");
-const refSelectLast5Btn = document.getElementById("ref-select-last5-btn");
-const refConfirmBtn = document.getElementById("ref-confirm-btn");
+const refSelectLast5Btn  = document.getElementById("ref-select-last5-btn");
+const refConfirmBtn      = document.getElementById("ref-confirm-btn");
 
-const styleList = document.getElementById("style-list");
-const addStyleBtn = document.getElementById("add-style-btn");
-const addStyleForm = document.getElementById("add-style-form");
-const styleNameInput = document.getElementById("style-name-input");
-const stylePromptInput = document.getElementById("style-prompt-input");
-const saveStyleBtn = document.getElementById("save-style-btn");
-const cancelStyleBtn = document.getElementById("cancel-style-btn");
+const styleList          = document.getElementById("style-list");
+const addStyleBtn        = document.getElementById("add-style-btn");
+const addStyleForm       = document.getElementById("add-style-form");
+const styleNameInput     = document.getElementById("style-name-input");
+const stylePromptInput   = document.getElementById("style-prompt-input");
+const saveStyleBtn       = document.getElementById("save-style-btn");
+const cancelStyleBtn     = document.getElementById("cancel-style-btn");
 
-const getSuggestionBtn = document.getElementById("get-suggestion-btn");
-const suggestionBox = document.getElementById("suggestion-box");
-const suggestionText = document.getElementById("suggestion-text");
-const copyBtn = document.getElementById("copy-btn");
-const aiLoading = document.getElementById("ai-loading");
-const aiError = document.getElementById("ai-error");
+const getSuggestionBtn   = document.getElementById("get-suggestion-btn");
+const suggestionBox      = document.getElementById("suggestion-box");
+const suggestionText     = document.getElementById("suggestion-text");
+const copyBtn            = document.getElementById("copy-btn");
+const aiLoading          = document.getElementById("ai-loading");
+const aiError            = document.getElementById("ai-error");
 
-const conversationList = document.getElementById("conversation-list");
+const conversationList   = document.getElementById("conversation-list");
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let currentChatData = null;
+let currentChatData       = null;
 let currentConversationId = null;
-let selectedStyleId = null;
-let selectedMessageIndices = null; // null = 전체, Set<number> = 선택된 인덱스
+let selectedStyleId       = null;
+let rangeStart            = 1;  // 1-based
+let rangeEnd              = 1;  // 1-based
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function setStatus(state) {
@@ -81,12 +90,16 @@ function checkAuthState() {
     chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
       if (res?.isLoggedIn) {
         loginSection.classList.add("hidden");
-        userSection.classList.remove("hidden");
+        loginSection.style.display = "none";
+        profileFabWrap.classList.remove("hidden");
+        profileFabWrap.style.display = "";
         userEmailDisplay.textContent = res.email || "";
         setStatus("active");
       } else {
         loginSection.classList.remove("hidden");
-        userSection.classList.add("hidden");
+        loginSection.style.display = "";
+        profileFabWrap.classList.add("hidden");
+        profileFabWrap.style.display = "none";
         setStatus("idle");
       }
       resolve(res?.isLoggedIn || false);
@@ -95,7 +108,7 @@ function checkAuthState() {
 }
 
 loginBtn.addEventListener("click", () => {
-  const email = emailInput.value.trim();
+  const email    = emailInput.value.trim();
   const password = passwordInput.value.trim();
   if (!email || !password) {
     loginError.textContent = "이메일과 비밀번호를 입력해주세요.";
@@ -103,10 +116,10 @@ loginBtn.addEventListener("click", () => {
     return;
   }
   loginError.classList.add("hidden");
-  loginBtn.disabled = true;
+  loginBtn.disabled   = true;
   loginBtn.textContent = "로그인 중...";
   chrome.runtime.sendMessage({ type: "LOGIN", payload: { email, password } }, (res) => {
-    loginBtn.disabled = false;
+    loginBtn.disabled   = false;
     loginBtn.textContent = "로그인";
     if (res?.success) {
       checkAuthState().then(() => loadConversations());
@@ -117,8 +130,18 @@ loginBtn.addEventListener("click", () => {
   });
 });
 
+// 프로필 FAB 토글
+profileFab.addEventListener("click", (e) => {
+  e.stopPropagation();
+  profileFabMenu.classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (!profileFabWrap.contains(e.target)) profileFabMenu.classList.add("hidden");
+});
+
 logoutBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "LOGOUT" }, () => {
+    profileFabMenu.classList.add("hidden");
     checkAuthState();
     conversationList.innerHTML = '<li class="empty-msg">로그인이 필요합니다.</li>';
   });
@@ -127,13 +150,15 @@ logoutBtn.addEventListener("click", () => {
 // ─── Chat data from content script ───────────────────────────────────────────
 function updateChatMeta(data) {
   currentChatData = data;
-  chatClientId.textContent = `고객 ID: ${data.clientId || "-"}`;
-  chatClientName.textContent = `고객명: ${data.clientName || "-"}`;
-  chatCategory.textContent = `카테고리: ${data.domCategory || data.category}`;
+  chatClientId.textContent    = `고객 ID: ${data.clientId || "-"}`;
+  chatClientName.textContent  = `고객명: ${data.clientName || "-"}`;
+  chatCategory.textContent    = `카테고리: ${data.domCategory || data.category}`;
   chatMessageCount.textContent = `메시지 수: ${data.messages.length}`;
-  refToggleCount.textContent = `${data.messages.length}개`;
-  // 새 대화 데이터가 오면 선택 범위 초기화
-  selectedMessageIndices = null;
+  refToggleCount.textContent  = `${data.messages.length}개`;
+  // 새 데이터 → 범위 초기화 (전체)
+  const n = data.messages.length;
+  rangeStart = 1;
+  rangeEnd   = n;
   setStatus("active");
 }
 
@@ -142,20 +167,17 @@ async function fetchChatData() {
   if (!tab?.id) return;
   chrome.tabs.sendMessage(tab.id, { type: "GET_CHAT_DATA" }, (response) => {
     if (chrome.runtime.lastError) return;
-    if (response?.success && response.data) {
-      updateChatMeta(response.data);
-    }
+    if (response?.success && response.data) updateChatMeta(response.data);
   });
 }
 
-// 실시간 업데이트 수신
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "CHAT_UPDATED" && message.payload) {
     updateChatMeta(message.payload);
     chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
       if (res?.conversationId) currentConversationId = res.conversationId;
     });
-    // 대화창 진입 감지 → 히스토리처럼 자동 목록 갱신
+    // 대화방 진입 시 히스토리 자동 갱신
     setTimeout(() => loadConversations(), 1500);
   }
 });
@@ -164,13 +186,13 @@ chrome.runtime.onMessage.addListener((message) => {
 crawlBtn.addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
-  crawlBtn.disabled = true;
+  crawlBtn.disabled    = true;
   crawlBtn.textContent = "⏳ 불러오는 중...";
   crawlStatus.textContent = "스크롤 중... 잠시 기다려주세요";
   crawlStatus.classList.remove("hidden");
 
   chrome.tabs.sendMessage(tab.id, { type: "SCROLL_AND_CRAWL" }, (res) => {
-    crawlBtn.disabled = false;
+    crawlBtn.disabled    = false;
     crawlBtn.textContent = "📜 처음부터 대화 불러오기";
     if (res?.success && res.data) {
       updateChatMeta(res.data);
@@ -184,9 +206,9 @@ crawlBtn.addEventListener("click", async () => {
 
 // ─── AI 참고 대화 오버레이 ────────────────────────────────────────────────────
 function openRefOverlay() {
-  renderOverlayMessages();
+  syncRangeSliders();
+  renderOverlayPreview();
   refOverlay.classList.remove("hidden");
-  // 두 프레임 후 open 클래스 추가 → CSS transition 트리거
   requestAnimationFrame(() => requestAnimationFrame(() => refOverlay.classList.add("open")));
 }
 
@@ -195,76 +217,91 @@ function closeRefOverlay() {
   setTimeout(() => refOverlay.classList.add("hidden"), 320);
 }
 
-function updateSelectedInfo() {
-  const total = currentChatData?.messages?.length || 0;
-  const count = selectedMessageIndices !== null ? selectedMessageIndices.size : total;
-  refSelectedInfo.textContent = `${count}개 선택`;
-  refConfirmBtn.textContent = `이 범위(${count}개)로 AI 답변 받기`;
+function syncRangeSliders() {
+  const n = currentChatData?.messages?.length || 0;
+  refRangeStart.min = refRangeStart.max = refRangeEnd.min = refRangeEnd.max = "1";
+  if (n > 0) {
+    refRangeStart.min = "1"; refRangeStart.max = String(n); refRangeStart.value = String(rangeStart);
+    refRangeEnd.min   = "1"; refRangeEnd.max   = String(n); refRangeEnd.value   = String(rangeEnd);
+  }
+  updateRangeLabels();
 }
 
-function renderOverlayMessages() {
-  const messages = currentChatData?.messages || [];
-  if (selectedMessageIndices === null) {
-    selectedMessageIndices = new Set(messages.map((_, i) => i));
-  }
+function updateRangeLabels() {
+  const s = parseInt(refRangeStart.value, 10);
+  const e = parseInt(refRangeEnd.value,   10);
+  const count = Math.max(0, e - s + 1);
+  refRangeStartLabel.textContent = `시작: ${s}번`;
+  refRangeEndLabel.textContent   = `끝: ${e}번`;
+  refRangeInfo.textContent       = `${count}개 선택`;
+  refConfirmBtn.textContent      = `이 범위(${count}개)로 AI 답변 받기`;
+  rangeStart = s;
+  rangeEnd   = e;
+  renderOverlayPreview();
+}
 
-  refOverlayList.innerHTML = messages
+function renderOverlayPreview() {
+  const msgs = currentChatData?.messages || [];
+  const s = Math.max(0, rangeStart - 1); // 0-based
+  const e = Math.min(msgs.length - 1, rangeEnd - 1);
+
+  refOverlayList.innerHTML = msgs
     .map((m, i) => {
-      const isFreelancer = m.role === "freelancer";
-      const label = isFreelancer ? "나" : "고객";
-      const checked = selectedMessageIndices.has(i) ? "checked" : "";
-      const preview = (m.content || "").slice(0, 60) + (m.content?.length > 60 ? "…" : "");
+      const inRange   = i >= s && i <= e;
+      const isFreel   = m.role === "freelancer";
+      const label     = isFreel ? "나" : "고객";
+      const preview   = (m.content || "").slice(0, 55) + (m.content?.length > 55 ? "…" : "");
       return `
-        <li class="ref-ol-item${isFreelancer ? " ref-ol-freelancer" : ""}">
-          <label class="ref-ol-label-wrap">
-            <input type="checkbox" class="ref-checkbox" data-index="${i}" ${checked} />
-            <span class="ref-ol-role">${label}</span>
-            <span class="ref-ol-text">${preview}</span>
-          </label>
+        <li class="ref-ol-item${isFreel ? " ref-ol-freelancer" : ""}${inRange ? " ref-ol-in-range" : ""}">
+          <span class="ref-ol-num">${i + 1}</span>
+          <span class="ref-ol-role">${label}</span>
+          <span class="ref-ol-text">${preview}</span>
         </li>`;
     })
     .join("");
-
-  refOverlayList.querySelectorAll(".ref-checkbox").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      const idx = parseInt(cb.dataset.index, 10);
-      if (cb.checked) selectedMessageIndices.add(idx);
-      else selectedMessageIndices.delete(idx);
-      updateSelectedInfo();
-    });
-  });
-
-  updateSelectedInfo();
 }
+
+refRangeStart.addEventListener("input", () => {
+  // 시작이 끝보다 크면 끝을 맞춰줌
+  if (parseInt(refRangeStart.value) > parseInt(refRangeEnd.value)) {
+    refRangeEnd.value = refRangeStart.value;
+  }
+  updateRangeLabels();
+});
+refRangeEnd.addEventListener("input", () => {
+  if (parseInt(refRangeEnd.value) < parseInt(refRangeStart.value)) {
+    refRangeStart.value = refRangeEnd.value;
+  }
+  updateRangeLabels();
+});
+
+// 빠른 선택
+refSelectAllBtn.addEventListener("click", () => {
+  const n = currentChatData?.messages?.length || 1;
+  refRangeStart.value = "1"; refRangeEnd.value = String(n);
+  updateRangeLabels();
+});
+refSelectLast20Btn.addEventListener("click", () => {
+  const n = currentChatData?.messages?.length || 1;
+  refRangeStart.value = String(Math.max(1, n - 19)); refRangeEnd.value = String(n);
+  updateRangeLabels();
+});
+refSelectLast10Btn.addEventListener("click", () => {
+  const n = currentChatData?.messages?.length || 1;
+  refRangeStart.value = String(Math.max(1, n - 9)); refRangeEnd.value = String(n);
+  updateRangeLabels();
+});
+refSelectLast5Btn.addEventListener("click", () => {
+  const n = currentChatData?.messages?.length || 1;
+  refRangeStart.value = String(Math.max(1, n - 4)); refRangeEnd.value = String(n);
+  updateRangeLabels();
+});
 
 refOpenBtn.addEventListener("click", openRefOverlay);
 refOverlayClose.addEventListener("click", closeRefOverlay);
+refOverlay.addEventListener("click", (e) => { if (e.target === refOverlay) closeRefOverlay(); });
 
-// 백드롭 클릭 시 닫기
-refOverlay.addEventListener("click", (e) => {
-  if (e.target === refOverlay) closeRefOverlay();
-});
-
-// 빠른 선택 버튼
-refSelectAllBtn.addEventListener("click", () => {
-  const msgs = currentChatData?.messages || [];
-  selectedMessageIndices = new Set(msgs.map((_, i) => i));
-  renderOverlayMessages();
-});
-refSelectLast10Btn.addEventListener("click", () => {
-  const msgs = currentChatData?.messages || [];
-  const from = Math.max(0, msgs.length - 10);
-  selectedMessageIndices = new Set(msgs.slice(from).map((_, i) => from + i));
-  renderOverlayMessages();
-});
-refSelectLast5Btn.addEventListener("click", () => {
-  const msgs = currentChatData?.messages || [];
-  const from = Math.max(0, msgs.length - 5);
-  selectedMessageIndices = new Set(msgs.slice(from).map((_, i) => from + i));
-  renderOverlayMessages();
-});
-
-// 확인 버튼 → 오버레이 닫고 AI 생성
+// 확인 → 오버레이 닫고 AI 생성
 refConfirmBtn.addEventListener("click", () => {
   closeRefOverlay();
   getSuggestionBtn.click();
@@ -296,15 +333,15 @@ getSuggestionBtn.addEventListener("click", async () => {
   aiLoading.classList.remove("hidden");
   getSuggestionBtn.disabled = true;
 
-  // 선택된 메시지만 필터링 (null이면 전체)
+  // 범위 내 메시지만 (0-based slice)
   const allMsgs = currentChatData.messages;
-  const messagesToSend = selectedMessageIndices !== null
-    ? allMsgs.filter((_, i) => selectedMessageIndices.has(i))
-    : allMsgs;
+  const s = Math.max(0, rangeStart - 1);
+  const e = Math.min(allMsgs.length, rangeEnd);
+  const messagesToSend = allMsgs.slice(s, e);
 
-  const styles = await loadStyles();
-  const selectedStyle = styles.find((s) => s.id === selectedStyleId);
-  const stylePrompt = selectedStyle ? selectedStyle.prompt : "";
+  const styles       = await loadStyles();
+  const selectedStyle = styles.find((st) => st.id === selectedStyleId);
+  const stylePrompt  = selectedStyle ? selectedStyle.prompt : "";
 
   chrome.runtime.sendMessage(
     {
@@ -380,30 +417,27 @@ async function loadConversations() {
       return;
     }
 
-    conversationList.innerHTML = deduped
-      .slice(0, 10)
-      .map((conv) => {
-        const name = conv.client_name || "이름 없음";
-        const cat = conv.category || "-";
-        const date = new Date(conv.created_at).toLocaleDateString("ko-KR");
-        const convUrl = conv.soomgo_url || "";
-        const dashUrl = `${DASHBOARD_URL}/conversations`;
-        return `
-          <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
-            <div class="conv-main">
-              <span class="conv-client-name">${name}</span>
-              <span class="conv-category-tag">${cat}</span>
+    conversationList.innerHTML = deduped.slice(0, 10).map((conv) => {
+      const name    = conv.client_name || "이름 없음";
+      const cat     = conv.category || "-";
+      const date    = new Date(conv.created_at).toLocaleDateString("ko-KR");
+      const convUrl = conv.soomgo_url || "";
+      const dashUrl = `${DASHBOARD_URL}/conversations`;
+      return `
+        <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
+          <div class="conv-main">
+            <span class="conv-client-name">${name}</span>
+            <span class="conv-category-tag">${cat}</span>
+          </div>
+          <div class="conv-sub">
+            <span class="conv-date">${date}</span>
+            <div class="conv-actions">
+              <a class="conv-dash-btn" href="${dashUrl}" target="_blank" title="대시보드">📋</a>
+              <button class="conv-delete-btn" data-id="${conv.id}" title="삭제">×</button>
             </div>
-            <div class="conv-sub">
-              <span class="conv-date">${date}</span>
-              <div class="conv-actions">
-                <a class="conv-dash-btn" href="${dashUrl}" target="_blank" title="대시보드에서 보기">📋</a>
-                <button class="conv-delete-btn" data-id="${conv.id}" title="목록에서 삭제">×</button>
-              </div>
-            </div>
-          </li>`;
-      })
-      .join("");
+          </div>
+        </li>`;
+    }).join("");
 
     conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
       item.addEventListener("click", (e) => {
@@ -448,7 +482,7 @@ async function renderStyles() {
   const styles = await loadStyles();
   styleList.innerHTML = styles.map((s) => `
     <div class="style-item ${s.id === selectedStyleId ? "selected" : ""}"
-         data-id="${s.id}" data-prompt="${s.prompt.replace(/"/g, "&quot;")}">
+         data-id="${s.id}">
       <span class="style-item-name">${s.name}</span>
       <button class="style-delete-btn" data-id="${s.id}" title="삭제">×</button>
     </div>`).join("");
@@ -474,12 +508,12 @@ async function renderStyles() {
 
 addStyleBtn.addEventListener("click", () => {
   addStyleForm.classList.toggle("hidden");
-  styleNameInput.value = "";
+  styleNameInput.value   = "";
   stylePromptInput.value = "";
 });
 cancelStyleBtn.addEventListener("click", () => addStyleForm.classList.add("hidden"));
 saveStyleBtn.addEventListener("click", async () => {
-  const name = styleNameInput.value.trim();
+  const name   = styleNameInput.value.trim();
   const prompt = stylePromptInput.value.trim();
   if (!name || !prompt) return;
   const styles = await loadStyles();
