@@ -423,32 +423,43 @@ async function loadConversations() {
       return;
     }
 
-    conversationList.innerHTML = deduped.slice(0, 10).map((conv) => {
-      const name    = conv.client_name || "이름 없음";
-      const cat     = conv.category || "-";
-      const date    = new Date(conv.created_at).toLocaleDateString("ko-KR");
-      const convUrl = conv.soomgo_url || "";
-      const dashUrl = `${DASHBOARD_URL}/conversations`;
+    const fmtDate = (iso) => {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+    };
+
+    conversationList.innerHTML = deduped.slice(0, 15).map((conv) => {
+      const name      = conv.client_name || "고객명 미확인";
+      const cat       = conv.category    || "general";
+      const firstDate = fmtDate(conv.created_at);
+      const lastDate  = fmtDate(conv.updated_at);
+      const sameDate  = firstDate === lastDate;
+      const convUrl   = conv.soomgo_url || "";
       return `
         <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
           <div class="conv-main">
             <span class="conv-client-name">${name}</span>
             <span class="conv-category-tag">${cat}</span>
           </div>
-          <div class="conv-sub">
-            <span class="conv-date">${date}</span>
-            <div class="conv-actions">
-              <a class="conv-dash-btn" href="${dashUrl}" target="_blank" title="대시보드">📋</a>
-              <button class="conv-delete-btn" data-id="${conv.id}" title="삭제">×</button>
-            </div>
+          <div class="conv-dates">
+            <span class="conv-date-label">첫 상담</span>
+            <span class="conv-date-val">${firstDate}</span>
+            ${sameDate ? "" : `<span class="conv-date-sep">→</span>
+            <span class="conv-date-label">최근</span>
+            <span class="conv-date-val">${lastDate}</span>`}
+          </div>
+          <div class="conv-actions">
+            <button class="conv-action-btn conv-dash-btn" data-id="${conv.id}" title="대시보드에 추가">📋</button>
+            <button class="conv-action-btn conv-delete-btn" data-id="${conv.id}" title="삭제">✕</button>
           </div>
         </li>`;
     }).join("");
 
+    // 항목 클릭 → 해당 숨고 채팅방으로 이동
     conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
       item.addEventListener("click", (e) => {
-        if (e.target.classList.contains("conv-delete-btn") ||
-            e.target.classList.contains("conv-dash-btn")) return;
+        if (e.target.closest(".conv-action-btn")) return;
         const url = item.dataset.url;
         if (!url) return;
         chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
@@ -457,6 +468,15 @@ async function loadConversations() {
       });
     });
 
+    // 대시보드 버튼 → 대시보드 새 탭
+    conversationList.querySelectorAll(".conv-dash-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.tabs.create({ url: `${DASHBOARD_URL}/conversations` });
+      });
+    });
+
+    // 삭제 버튼 → 로컬 히든 목록에 추가
     conversationList.querySelectorAll(".conv-delete-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();

@@ -27,6 +27,8 @@ class ConversationUpdate(BaseModel):
     project_id: UUID | None = None
     soomgo_url: str | None = None
     category: str | None = None
+    client_name: str | None = None
+    client_id: str | None = None
 
 
 class MessageAppend(BaseModel):

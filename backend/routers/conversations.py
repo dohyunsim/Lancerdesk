@@ -97,6 +97,12 @@ def update_conversation(
     if payload.category is not None:
         fields.append("category = %s")
         values.append(payload.category)
+    if payload.client_name is not None:
+        fields.append("client_name = %s")
+        values.append(payload.client_name)
+    if payload.client_id is not None:
+        fields.append("client_id = %s")
+        values.append(payload.client_id)
 
     if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")

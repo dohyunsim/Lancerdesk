@@ -65,8 +65,18 @@ async function saveConversation(chatData) {
   const cachedId = urlConvMap[soomgoUrl];
 
   if (cachedId) {
-    // 이미 저장된 대화방 → 캐시된 ID만 반환 (매 mutation마다 중복 저장 방지)
     chrome.storage.local.set({ currentConversationId: cachedId });
+    // client_name이 새로 파싱됐을 때만 PATCH (updated_at 갱신 겸)
+    if (chatData.clientName || chatData.category) {
+      apiRequest(`/conversations/${cachedId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          client_name: chatData.clientName || undefined,
+          client_id:   chatData.clientId   || undefined,
+          category:    chatData.category   || undefined,
+        }),
+      }).catch(() => {});
+    }
     return { id: cachedId };
   }
 
@@ -79,6 +89,15 @@ async function saveConversation(chatData) {
       const existingId = existing[0].id;
       urlConvMap[soomgoUrl] = existingId;
       chrome.storage.local.set({ urlConvMap, currentConversationId: existingId });
+      // client_name / updated_at 갱신
+      apiRequest(`/conversations/${existingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          client_name: chatData.clientName || undefined,
+          client_id:   chatData.clientId   || undefined,
+          category:    chatData.category   || undefined,
+        }),
+      }).catch(() => {});
       return { id: existingId };
     }
   } catch (_) { /* fallthrough */ }
