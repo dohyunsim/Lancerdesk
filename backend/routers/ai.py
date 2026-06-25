@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 
 from backend.config import API_KEY
 from backend.models.ai import AISuggestRequest, AISuggestResponse
 from backend.services.claude import generate_reply_suggestion
-from backend.services.supabase import get_supabase
+from backend.services.db import get_db
 
 router = APIRouter(prefix="/ai", tags=["ai"])
-
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=True)
 
 
@@ -20,11 +20,10 @@ def verify_api_key(key: str = Security(api_key_header)) -> str:
 
 
 @router.post("/suggest", response_model=AISuggestResponse)
-async def suggest_reply(
+def suggest_reply(
     payload: AISuggestRequest,
     _: str = Depends(verify_api_key),
 ) -> AISuggestResponse:
-    """Generate an AI-powered reply suggestion for a soomgo conversation."""
     try:
         suggestion = generate_reply_suggestion(
             conversation_messages=payload.messages,
@@ -32,22 +31,19 @@ async def suggest_reply(
             context=payload.context,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI generation failed: {str(exc)}",
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(exc)}") from exc
 
-    # Persist the AI response to the database
-    db = get_supabase()
-    prompt_summary = f"category={payload.category}, messages_count={len(payload.messages)}"
-    db.table("ai_responses").insert(
-        {
-            "conversation_id": str(payload.conversation_id),
-            "prompt": prompt_summary,
-            "response": suggestion,
-            "model": "claude-haiku-4-5",
-        }
-    ).execute()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ai_responses (conversation_id, prompt, response, model) VALUES (%s, %s, %s, %s)",
+                (
+                    str(payload.conversation_id),
+                    f"category={payload.category}, messages_count={len(payload.messages)}",
+                    suggestion,
+                    "claude-haiku-4-5",
+                ),
+            )
 
     return AISuggestResponse(
         suggestion=suggestion,

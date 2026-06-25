@@ -1,21 +1,17 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
+import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 
 from backend.config import API_KEY
-from backend.models.conversation import (
-    ConversationCreate,
-    ConversationResponse,
-    ConversationUpdate,
-    MessageAppend,
-)
-from backend.services.supabase import get_supabase
+from backend.models.conversation import ConversationCreate, ConversationUpdate, MessageAppend
+from backend.services.db import get_db
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
-
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=True)
 
 
@@ -26,125 +22,125 @@ def verify_api_key(key: str = Security(api_key_header)) -> str:
 
 
 @router.get("", response_model=list[dict])
-async def list_conversations(
+def list_conversations(
     user_id: str | None = None,
     _: str = Depends(verify_api_key),
 ) -> list[dict]:
-    db = get_supabase()
-    query = db.table("conversations").select("*")
-    if user_id:
-        query = query.eq("user_id", user_id)
-    result = query.order("created_at", desc=True).execute()
-    return result.data
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if user_id:
+                cur.execute(
+                    "SELECT * FROM conversations WHERE user_id = %s ORDER BY created_at DESC",
+                    (user_id,),
+                )
+            else:
+                cur.execute("SELECT * FROM conversations ORDER BY created_at DESC")
+            return [dict(row) for row in cur.fetchall()]
 
 
 @router.get("/{conversation_id}", response_model=dict)
-async def get_conversation(
+def get_conversation(
     conversation_id: UUID,
     _: str = Depends(verify_api_key),
 ) -> dict:
-    db = get_supabase()
-    result = (
-        db.table("conversations")
-        .select("*")
-        .eq("id", str(conversation_id))
-        .single()
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return result.data
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM conversations WHERE id = %s", (str(conversation_id),))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            return dict(row)
 
 
 @router.post("", response_model=dict, status_code=201)
-async def create_conversation(
+def create_conversation(
     payload: ConversationCreate,
     _: str = Depends(verify_api_key),
 ) -> dict:
-    db = get_supabase()
-    data = {
-        "user_id": str(payload.user_id),
-        "project_id": str(payload.project_id) if payload.project_id else None,
-        "soomgo_url": payload.soomgo_url,
-        "category": payload.category,
-        "messages": payload.messages,
-    }
-    result = db.table("conversations").insert(data).execute()
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create conversation")
-    return result.data[0]
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                INSERT INTO conversations (user_id, project_id, soomgo_url, category, messages)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    str(payload.user_id),
+                    str(payload.project_id) if payload.project_id else None,
+                    payload.soomgo_url,
+                    payload.category,
+                    json.dumps(payload.messages),
+                ),
+            )
+            return dict(cur.fetchone())
 
 
 @router.patch("/{conversation_id}", response_model=dict)
-async def update_conversation(
+def update_conversation(
     conversation_id: UUID,
     payload: ConversationUpdate,
     _: str = Depends(verify_api_key),
 ) -> dict:
-    db = get_supabase()
-    update_data: dict = {}
+    fields = []
+    values = []
     if payload.project_id is not None:
-        update_data["project_id"] = str(payload.project_id)
+        fields.append("project_id = %s")
+        values.append(str(payload.project_id))
     if payload.soomgo_url is not None:
-        update_data["soomgo_url"] = payload.soomgo_url
+        fields.append("soomgo_url = %s")
+        values.append(payload.soomgo_url)
     if payload.category is not None:
-        update_data["category"] = payload.category
+        fields.append("category = %s")
+        values.append(payload.category)
 
-    if not update_data:
+    if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = (
-        db.table("conversations")
-        .update(update_data)
-        .eq("id", str(conversation_id))
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return result.data[0]
+    values.append(str(conversation_id))
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"UPDATE conversations SET {', '.join(fields)} WHERE id = %s RETURNING *",
+                values,
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            return dict(row)
 
 
 @router.post("/{conversation_id}/messages", response_model=dict)
-async def append_message(
+def append_message(
     conversation_id: UUID,
     payload: MessageAppend,
     _: str = Depends(verify_api_key),
 ) -> dict:
-    """Append a single message to the conversation's messages JSONB array."""
-    db = get_supabase()
-
-    # Fetch existing conversation
-    existing = (
-        db.table("conversations")
-        .select("messages")
-        .eq("id", str(conversation_id))
-        .single()
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    current_messages: list = existing.data.get("messages") or []
-    new_message = {
-        "role": payload.role,
-        "content": payload.content,
-        "timestamp": payload.timestamp,
-    }
-    current_messages.append(new_message)
-
-    result = (
-        db.table("conversations")
-        .update({"messages": current_messages})
-        .eq("id", str(conversation_id))
-        .execute()
-    )
-    return result.data[0]
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE conversations
+                SET messages = messages || %s::jsonb
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    json.dumps([{"role": payload.role, "content": payload.content, "timestamp": payload.timestamp}]),
+                    str(conversation_id),
+                ),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            return dict(row)
 
 
 @router.delete("/{conversation_id}", status_code=204)
-async def delete_conversation(
+def delete_conversation(
     conversation_id: UUID,
     _: str = Depends(verify_api_key),
 ) -> None:
-    db = get_supabase()
-    db.table("conversations").delete().eq("id", str(conversation_id)).execute()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM conversations WHERE id = %s", (str(conversation_id),))

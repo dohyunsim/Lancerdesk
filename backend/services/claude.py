@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import anthropic
 from backend.config import CLAUDE_API_KEY
 
