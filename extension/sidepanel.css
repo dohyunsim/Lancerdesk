@@ -300,3 +300,9 @@ body {
 .conv-date { margin-left:auto; }
 .conv-item-link { cursor:pointer; }
 .conv-item-link:hover { border-color:var(--primary); background:#eef2ff; }
+.conv-category-tag { font-size:10px; background:#f3f4f6; color:#4b5563; padding:1px 6px; border-radius:10px; }
+.conv-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
+.conv-dash-btn { text-decoration:none; font-size:12px; opacity:0.6; cursor:pointer; }
+.conv-dash-btn:hover { opacity:1; }
+.conv-delete-btn { background:none; border:none; cursor:pointer; color:var(--text-secondary); font-size:14px; line-height:1; padding:0 2px; }
+.conv-delete-btn:hover { color:#ef4444; }

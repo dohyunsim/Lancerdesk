@@ -113,7 +113,7 @@ function updateChatMeta(data) {
   currentChatData = data;
   chatClientId.textContent = `고객 ID: ${data.clientId || "-"}`;
   chatClientName.textContent = `고객명: ${data.clientName || "-"}`;
-  chatCategory.textContent = `카테고리: ${data.category}`;
+  chatCategory.textContent = `카테고리: ${data.domCategory || data.category}`;
   chatMessageCount.textContent = `메시지 수: ${data.messages.length}`;
   setStatus("active");
 }
@@ -210,6 +210,16 @@ copyBtn.addEventListener("click", () => {
 });
 
 // ─── Conversation List ────────────────────────────────────────────────────────
+const DASHBOARD_URL = "https://lancerdesk-dashboard.vercel.app";
+
+async function getHiddenConvIds() {
+  return new Promise((r) => chrome.storage.local.get(["hiddenConvIds"], (s) => r(s.hiddenConvIds || [])));
+}
+async function hideConvId(id) {
+  const hidden = await getHiddenConvIds();
+  await new Promise((r) => chrome.storage.local.set({ hiddenConvIds: [...hidden, id] }, r));
+}
+
 async function loadConversations() {
   const isLoggedIn = await new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => {
@@ -218,55 +228,80 @@ async function loadConversations() {
   });
 
   if (!isLoggedIn) {
-    conversationList.innerHTML =
-      '<li class="empty-msg">로그인이 필요합니다.</li>';
+    conversationList.innerHTML = '<li class="empty-msg">로그인이 필요합니다.</li>';
     return;
   }
 
-  chrome.runtime.sendMessage(
-    { type: "FETCH_CONVERSATIONS" },
-    (response) => {
-      if (!response?.success || !response.data?.length) {
-        conversationList.innerHTML =
-          '<li class="empty-msg">대화가 없습니다.</li>';
-        return;
-      }
+  chrome.runtime.sendMessage({ type: "FETCH_CONVERSATIONS" }, async (response) => {
+    if (!response?.success || !response.data?.length) {
+      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
+      return;
+    }
 
-      conversationList.innerHTML = response.data
-        .slice(0, 10)
-        .map((conv) => {
-          const name = conv.client_name || "이름 없음";
-          const cid = conv.client_id || "-";
-          const msgCount = (conv.messages || []).length;
-          const range = msgCount > 0 ? `1~${msgCount}번 메시지` : "메시지 없음";
-          const date = new Date(conv.created_at).toLocaleDateString("ko-KR");
-          const convUrl = conv.soomgo_url || "";
-          return `
-            <li class="conv-item${convUrl ? " conv-item-link" : ""}" data-url="${convUrl}">
-              <div class="conv-main">
-                <span class="conv-client-name">${name}</span>
-                <span class="conv-client-id">ID: ${cid}</span>
-              </div>
-              <div class="conv-sub">
-                <span class="conv-range">${range}</span>
-                <span class="conv-date">${date}</span>
-              </div>
-            </li>`;
-        })
-        .join("");
+    const hidden = await getHiddenConvIds();
 
-      // 대화 항목 클릭 → 해당 숨고 URL로 현재 탭 이동
-      conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
-        item.addEventListener("click", () => {
-          const url = item.dataset.url;
-          if (!url) return;
-          chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab?.id) chrome.tabs.update(tab.id, { url });
-          });
+    // 같은 soomgo_url은 하나로 (가장 최신 유지), 숨긴 항목 제거
+    const seen = new Set();
+    const deduped = response.data.filter((conv) => {
+      if (hidden.includes(conv.id)) return false;
+      const key = conv.soomgo_url || conv.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    if (!deduped.length) {
+      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
+      return;
+    }
+
+    conversationList.innerHTML = deduped
+      .slice(0, 10)
+      .map((conv) => {
+        const name = conv.client_name || "이름 없음";
+        const cat = conv.category || "-";
+        const date = new Date(conv.created_at).toLocaleDateString("ko-KR");
+        const convUrl = conv.soomgo_url || "";
+        const dashUrl = `${DASHBOARD_URL}/conversations`;
+        return `
+          <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
+            <div class="conv-main">
+              <span class="conv-client-name">${name}</span>
+              <span class="conv-category-tag">${cat}</span>
+            </div>
+            <div class="conv-sub">
+              <span class="conv-date">${date}</span>
+              <div class="conv-actions">
+                <a class="conv-dash-btn" href="${dashUrl}" target="_blank" title="대시보드에서 보기">📋</a>
+                <button class="conv-delete-btn" data-id="${conv.id}" title="목록에서 삭제">×</button>
+              </div>
+            </div>
+          </li>`;
+      })
+      .join("");
+
+    // 숨고 URL 클릭 이동 (delete/dash 버튼 제외)
+    conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        if (e.target.classList.contains("conv-delete-btn") ||
+            e.target.classList.contains("conv-dash-btn")) return;
+        const url = item.dataset.url;
+        if (!url) return;
+        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+          if (tab?.id) chrome.tabs.update(tab.id, { url });
         });
       });
-    }
-  );
+    });
+
+    // X 버튼 → 로컬에서 숨기기
+    conversationList.querySelectorAll(".conv-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await hideConvId(btn.dataset.id);
+        loadConversations();
+      });
+    });
+  });
 }
 
 refreshBtn.addEventListener("click", loadConversations);

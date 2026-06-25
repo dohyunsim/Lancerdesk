@@ -92,11 +92,12 @@ function extractClientInfo() {
     if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
   }
 
-  // 고객명: "N시간 전 접속" 또는 "N분 전 접속" 텍스트 직전의 한국어 이름
+  // 고객명: "N시간 전 접속" 텍스트에서 가장 가까운 이전 한국어 이름을 역방향으로 탐색
   let clientName = null;
   for (let i = 0; i < textNodes.length; i++) {
     if (textNodes[i].text.match(/\d+(시간|분|일|초)\s*전\s*접속/)) {
-      for (let j = Math.max(0, i - 10); j < i; j++) {
+      // 역방향 탐색: 바로 앞 노드부터 최대 15개, 공백 없는 순수 한국어 이름 우선
+      for (let j = i - 1; j >= Math.max(0, i - 15); j--) {
         const t = textNodes[j].text;
         if (/^[가-힣]{2,8}$/.test(t)) {
           clientName = t;
