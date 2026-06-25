@@ -5,6 +5,7 @@
   "description": "숨고 프리랜서를 위한 AI 상담 보조 도구",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "sidePanel",
     "scripting"

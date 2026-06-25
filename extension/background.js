@@ -134,21 +134,48 @@ async function getAISuggestion(conversationId, messages, category, stylePrompt =
   return result.suggestion;
 }
 
-// Reset current conversation ID when navigating to a new soomgo chat page
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (
-    changeInfo.status === "complete" &&
-    tab.url &&
-    tab.url.includes("soomgo.com")
-  ) {
-    // Clear cached conversation ID on page load so a new one is created
-    chrome.storage.local.remove("currentConversationId");
+// ─── 사이드패널 자동 열기 / 닫기 ────────────────────────────────────────────
+// 숨고 탭: 패널 활성화 + 자동 열기 / 그 외 탭: 패널 비활성화(슬라이드 아웃)
+
+function isSoomgoUrl(url) {
+  return !!url && (url.includes("soomgo.com"));
+}
+
+async function syncSidePanel(tabId, url) {
+  try {
+    if (isSoomgoUrl(url)) {
+      await chrome.sidePanel.setOptions({ tabId, enabled: true, path: "sidepanel.html" });
+      await chrome.sidePanel.open({ tabId });
+    } else {
+      await chrome.sidePanel.setOptions({ tabId, enabled: false });
+    }
+  } catch (_) {
+    // open()은 특정 컨텍스트에서만 허용 — 실패해도 무시
   }
+}
+
+// 탭 전환 시
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    syncSidePanel(tabId, tab.url);
+  } catch (_) {}
 });
 
-// Open side panel when the extension action is clicked
+// URL 변경 / 페이지 로드 완료 시
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") return;
+  const url = tab.url || "";
+  if (isSoomgoUrl(url)) {
+    // 숨고 페이지 전환 시 대화 ID 초기화
+    chrome.storage.local.remove("currentConversationId");
+  }
+  syncSidePanel(tabId, url);
+});
+
+// 확장 아이콘 클릭 (수동 토글)
 chrome.action.onClicked.addListener((tab) => {
-  chrome.sidePanel.open({ tabId: tab.id });
+  chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
 });
 
 // Message handler — receives messages from content.js and sidepanel.js
