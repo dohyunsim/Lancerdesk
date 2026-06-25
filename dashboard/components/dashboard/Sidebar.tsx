@@ -9,6 +9,7 @@ const navItems = [
   { href: "/projects", label: "프로젝트" },
   { href: "/conversations", label: "대화 목록" },
   { href: "/analytics", label: "분석" },
+  { href: "/settings", label: "설정" },
 ];
 
 export default function Sidebar() {

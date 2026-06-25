@@ -48,9 +48,8 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     try {
-      const res = await fetch(`${apiUrl}/auth/register`, {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: regName, email: regEmail, password: regPassword }),
@@ -58,17 +57,6 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json()
         setError(data.detail || '회원가입에 실패했습니다.')
-        return
-      }
-      // After register, log in automatically
-      const loginRes = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regEmail, password: regPassword }),
-      })
-      if (!loginRes.ok) {
-        setError('회원가입 완료. 로그인 탭에서 로그인해 주세요.')
-        setTab('login')
         return
       }
       router.push('/')
