@@ -1,7 +1,7 @@
 // Lancerdesk Background Service Worker (Manifest V3)
 
 // 운영 배포 URL (개발 시에는 "http://localhost:8000" 으로 변경)
-const API_BASE_URL = "https://your-railway-app.railway.app";
+const API_BASE_URL = "https://backend-production-53b3f.up.railway.app";
 
 /**
  * Retrieve stored API key from chrome.storage.sync.

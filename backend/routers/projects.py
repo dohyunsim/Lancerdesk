@@ -4,6 +4,7 @@ from uuid import UUID
 
 import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi.responses import Response
 from fastapi.security.api_key import APIKeyHeader
 
 from backend.config import API_KEY
@@ -121,11 +122,12 @@ def update_project(
             return dict(row)
 
 
-@router.delete("/{project_id}", status_code=204)
+@router.delete("/{project_id}")
 def delete_project(
     project_id: UUID,
     _: str = Depends(verify_api_key),
-) -> None:
+) -> Response:
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM projects WHERE id = %s", (str(project_id),))
+    return Response(status_code=204)
