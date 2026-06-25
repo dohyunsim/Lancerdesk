@@ -56,17 +56,52 @@ function detectCategory(text) {
 }
 
 /**
+ * Extract client/room ID and name from the current soomgo.com URL and page.
+ * @returns {{ clientId: string|null, clientName: string|null }}
+ */
+function extractClientInfo() {
+  const url = window.location.href;
+
+  // Soomgo URL 패턴에서 숫자 ID 추출 (예: /chat/rooms/12345, /messages/12345)
+  const idMatch = url.match(/\/(\d{4,})/g);
+  const clientId = idMatch ? idMatch[idMatch.length - 1].replace("/", "") : null;
+
+  // 페이지에서 상대방 이름 추출 시도
+  const nameSelectors = [
+    "[class*='partner']",
+    "[class*='opponent']",
+    "[class*='other-user']",
+    "[class*='sender-name']",
+    "[class*='username']",
+    "[class*='nickname']",
+  ];
+  let clientName = null;
+  for (const sel of nameSelectors) {
+    const el = document.querySelector(sel);
+    if (el && el.textContent.trim()) {
+      clientName = el.textContent.trim().slice(0, 30);
+      break;
+    }
+  }
+
+  return { clientId, clientName };
+}
+
+/**
  * Scrape chat messages from the current soomgo.com chat page.
- * @returns {{ messages: Array, url: string, category: string } | null}
+ * @returns {{ messages: Array, url: string, category: string, clientId: string|null, clientName: string|null } | null}
  */
 function scrapeChatMessages() {
   // soomgo.com uses various selectors — try common patterns
   const messageSelectors = [
-    ".chat-message",
+    "[class*='Message']",
     "[class*='message']",
+    "[class*='chat-bubble']",
+    "[class*='bubble']",
     "[class*='chat']",
     "[data-testid*='message']",
     ".conversation-message",
+    ".chat-message",
   ];
 
   let messageElements = [];
@@ -78,29 +113,40 @@ function scrapeChatMessages() {
     }
   }
 
+  const { clientId, clientName } = extractClientInfo();
+
   if (messageElements.length === 0) {
-    return null;
+    // 메시지 셀렉터 매칭 실패해도 URL·고객 정보는 반환
+    return {
+      messages: [],
+      url: window.location.href,
+      category: "general",
+      clientId,
+      clientName,
+    };
   }
 
   const messages = messageElements.map((el) => {
-    // Determine role from class names or data attributes
     const classList = el.className || "";
     const isMine =
       classList.includes("mine") ||
       classList.includes("sent") ||
       classList.includes("my-") ||
+      classList.includes("Me") ||
+      classList.includes("right") ||
       el.dataset.sender === "me";
 
     const textEl =
       el.querySelector("[class*='text']") ||
       el.querySelector("[class*='content']") ||
+      el.querySelector("[class*='body']") ||
       el.querySelector("p") ||
       el;
 
     return {
       role: isMine ? "freelancer" : "client",
       content: (textEl.textContent || "").trim(),
-      timestamp: el.dataset.time || el.getAttribute("data-time") || "",
+      timestamp: el.dataset.time || el.getAttribute("data-time") || new Date().toISOString(),
     };
   }).filter((m) => m.content.length > 0);
 
@@ -111,6 +157,8 @@ function scrapeChatMessages() {
     messages,
     url: window.location.href,
     category,
+    clientId,
+    clientName,
   };
 }
 

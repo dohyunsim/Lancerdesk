@@ -12,8 +12,9 @@ const logoutBtn = document.getElementById("logout-btn");
 
 const statusDot = document.getElementById("status-dot");
 
+const chatClientId = document.getElementById("chat-client-id");
+const chatClientName = document.getElementById("chat-client-name");
 const chatCategory = document.getElementById("chat-category");
-const chatUrl = document.getElementById("chat-url");
 const chatMessageCount = document.getElementById("chat-message-count");
 
 const getSuggestionBtn = document.getElementById("get-suggestion-btn");
@@ -101,8 +102,9 @@ logoutBtn.addEventListener("click", () => {
 // ─── Chat data from content script ───────────────────────────────────────────
 function updateChatMeta(data) {
   currentChatData = data;
+  chatClientId.textContent = `고객 ID: ${data.clientId || "-"}`;
+  chatClientName.textContent = `고객명: ${data.clientName || "-"}`;
   chatCategory.textContent = `카테고리: ${data.category}`;
-  chatUrl.textContent = `URL: ${data.url}`;
   chatMessageCount.textContent = `메시지 수: ${data.messages.length}`;
   setStatus("active");
 }

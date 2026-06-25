@@ -14,7 +14,7 @@ class MessageItem(BaseModel):
 
 
 class ConversationCreate(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None  # JWT 인증 시 백엔드가 토큰에서 자동 추출
     project_id: UUID | None = None
     soomgo_url: str = ""
     category: str = "general"
