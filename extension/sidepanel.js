@@ -17,6 +17,13 @@ const chatClientName = document.getElementById("chat-client-name");
 const chatCategory = document.getElementById("chat-category");
 const chatMessageCount = document.getElementById("chat-message-count");
 
+const crawlBtn = document.getElementById("crawl-btn");
+const crawlStatus = document.getElementById("crawl-status");
+const refToggle = document.getElementById("ref-toggle");
+const refToggleCount = document.getElementById("ref-toggle-count");
+const refPanel = document.getElementById("ref-panel");
+const refList = document.getElementById("ref-list");
+
 const styleList = document.getElementById("style-list");
 const addStyleBtn = document.getElementById("add-style-btn");
 const addStyleForm = document.getElementById("add-style-form");
@@ -109,14 +116,59 @@ logoutBtn.addEventListener("click", () => {
 });
 
 // ─── Chat data from content script ───────────────────────────────────────────
+function renderRefMessages(messages) {
+  const last10 = messages.slice(-10);
+  refToggleCount.textContent = `${last10.length}개`;
+  refList.innerHTML = last10
+    .map((m) => {
+      const role = m.role === "freelancer" ? "freelancer" : "client";
+      const label = role === "freelancer" ? "나" : "고객";
+      return `<li class="ref-msg ref-msg-${role}">
+        <span class="ref-msg-label">${label}</span>
+        <span class="ref-msg-content">${m.content}</span>
+      </li>`;
+    })
+    .join("");
+}
+
 function updateChatMeta(data) {
   currentChatData = data;
   chatClientId.textContent = `고객 ID: ${data.clientId || "-"}`;
   chatClientName.textContent = `고객명: ${data.clientName || "-"}`;
   chatCategory.textContent = `카테고리: ${data.domCategory || data.category}`;
   chatMessageCount.textContent = `메시지 수: ${data.messages.length}`;
+  renderRefMessages(data.messages);
   setStatus("active");
 }
+
+// AI 참고 대화 토글
+refToggle.addEventListener("click", () => {
+  const isHidden = refPanel.classList.toggle("hidden");
+  refToggle.querySelector(".ref-arrow").textContent = isHidden ? "▼" : "▲";
+});
+
+// 처음부터 대화 불러오기
+crawlBtn.addEventListener("click", async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+  crawlBtn.disabled = true;
+  crawlBtn.textContent = "⏳ 불러오는 중...";
+  crawlStatus.textContent = "스크롤 중... 잠시 기다려주세요";
+  crawlStatus.classList.remove("hidden");
+
+  chrome.tabs.sendMessage(tab.id, { type: "SCROLL_AND_CRAWL" }, (res) => {
+    crawlBtn.disabled = false;
+    crawlBtn.textContent = "📜 처음부터 대화 불러오기";
+    if (res?.success && res.data) {
+      updateChatMeta(res.data);
+      crawlStatus.textContent = `완료: ${res.data.messages.length}개 메시지 로드됨`;
+      setTimeout(() => crawlStatus.classList.add("hidden"), 3000);
+    } else {
+      crawlStatus.textContent = "불러오기 실패 — 숨고 채팅 페이지인지 확인해주세요";
+      setTimeout(() => crawlStatus.classList.add("hidden"), 3000);
+    }
+  });
+});
 
 // Ask content script for current chat data
 async function fetchChatData() {

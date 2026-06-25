@@ -49,14 +49,25 @@ def generate_reply_suggestion(
 - 200자 이내로 간결하게 작성하세요{style_instruction}"""
 
     # Build messages from conversation history
+    # Map extension roles (client/freelancer) to Claude API roles (user/assistant)
+    role_map = {"client": "user", "freelancer": "assistant", "user": "user", "assistant": "assistant"}
     messages = []
-    for msg in conversation_messages[-10:]:  # Use last 10 messages for context
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role in ("user", "assistant") and content:
+    for msg in conversation_messages[-10:]:
+        role = role_map.get(msg.get("role", "user"), "user")
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        # Merge consecutive same-role messages (Claude API requires alternating roles)
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"] += "\n" + content
+        else:
             messages.append({"role": role, "content": content})
 
-    # If no messages, add a placeholder
+    # Claude API requires messages to start with "user"
+    while messages and messages[0]["role"] != "user":
+        messages.pop(0)
+
+    # Fallback if no messages
     if not messages:
         messages = [{"role": "user", "content": "안녕하세요, 작업 문의 드립니다."}]
 

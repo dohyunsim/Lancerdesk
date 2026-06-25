@@ -47,6 +47,22 @@
         <p id="chat-category">카테고리: -</p>
         <p id="chat-message-count">메시지 수: -</p>
       </div>
+
+      <!-- 처음부터 크롤링 버튼 -->
+      <button id="crawl-btn" class="btn btn-outline btn-sm crawl-btn">
+        📜 처음부터 대화 불러오기
+      </button>
+      <div id="crawl-status" class="crawl-status hidden"></div>
+
+      <!-- AI 참고 대화 토글 -->
+      <div id="ref-toggle" class="ref-toggle">
+        <span id="ref-toggle-label">AI가 참고 중인 대화</span>
+        <span id="ref-toggle-count" class="ref-count">0개</span>
+        <span class="ref-arrow">▼</span>
+      </div>
+      <div id="ref-panel" class="ref-panel hidden">
+        <ul id="ref-list" class="ref-list"></ul>
+      </div>
       <div id="style-section" style="margin-top:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;">답변 스타일</span>

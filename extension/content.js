@@ -252,11 +252,59 @@ if (initialData) {
 // Start watching for changes
 startObserving();
 
+/**
+ * 채팅 컨테이너를 최상단까지 스크롤해서 이전 메시지를 모두 로드한다.
+ * Soomgo는 스크롤 상단 도달 시 이전 메시지를 동적으로 불러오므로
+ * scrollTop=0 이 유지될 때까지 반복한다.
+ */
+async function scrollToTopAndCrawl(onProgress) {
+  // 스크롤 가능한 채팅 컨테이너 탐색
+  const candidates = Array.from(document.querySelectorAll("*")).filter(
+    (el) => el.scrollHeight - el.clientHeight > 100 && el.scrollTop > 0
+  );
+  // scrollTop이 가장 큰 요소(= 현재 채팅 스크롤 영역)
+  candidates.sort((a, b) => b.scrollTop - a.scrollTop);
+  const container = candidates[0] || document.documentElement;
+
+  let prevHeight = 0;
+  let staleCount = 0;
+  const MAX_STALE = 4; // 새 메시지 로드 없이 4번 연속이면 종료
+
+  for (let i = 0; i < 60; i++) {
+    container.scrollTop = 0;
+    await new Promise((r) => setTimeout(r, 700));
+
+    const curHeight = container.scrollHeight;
+    if (curHeight === prevHeight) {
+      staleCount++;
+      if (staleCount >= MAX_STALE) break;
+    } else {
+      staleCount = 0;
+    }
+    prevHeight = curHeight;
+
+    if (onProgress) onProgress(i);
+  }
+
+  // 스크롤 완료 후 전체 메시지 재스크랩
+  return scrapeChatMessages();
+}
+
 // Listen for requests from the sidepanel / background
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "GET_CHAT_DATA") {
     const data = scrapeChatMessages();
     sendResponse({ success: true, data });
   }
+
+  if (message.type === "SCROLL_AND_CRAWL") {
+    scrollToTopAndCrawl().then((data) => {
+      // 완료 후 사이드패널로 전송
+      chrome.runtime.sendMessage({ type: "CHAT_UPDATED", payload: data });
+      sendResponse({ success: true, data });
+    });
+    return true;
+  }
+
   return true; // keep channel open for async
 });
