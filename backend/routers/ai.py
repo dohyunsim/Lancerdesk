@@ -33,17 +33,20 @@ def suggest_reply(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(exc)}") from exc
 
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO ai_responses (conversation_id, prompt, response, model) VALUES (%s, %s, %s, %s)",
-                (
-                    str(payload.conversation_id),
-                    f"category={payload.category}, messages_count={len(payload.messages)}",
-                    suggestion,
-                    "claude-haiku-4-5",
-                ),
-            )
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO ai_responses (conversation_id, prompt, response, model) VALUES (%s, %s, %s, %s)",
+                    (
+                        str(payload.conversation_id),
+                        f"category={payload.category}, messages_count={len(payload.messages)}",
+                        suggestion,
+                        "claude-haiku-4-5",
+                    ),
+                )
+    except Exception:
+        pass  # DB 저장 실패해도 AI 응답은 반환
 
     return AISuggestResponse(
         suggestion=suggestion,
