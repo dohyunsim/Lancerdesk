@@ -46,7 +46,7 @@ export default function ProjectsPage() {
   }
 
   async function handleFormSubmit(
-    data: Omit<Project, "id" | "created_at" | "updated_at">
+    data: Omit<Project, "id" | "created_at" | "updated_at" | "user_id">
   ) {
     if (editingProject) {
       await projectsApi.update(editingProject.id, data);

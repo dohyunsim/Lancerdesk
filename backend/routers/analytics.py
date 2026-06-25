@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -50,10 +52,12 @@ def get_summary(
 @router.get("/monthly")
 def get_monthly(
     user_id: str | None = None,
-    year: int = 2025,
+    year: int | None = None,
     user: dict = Depends(get_current_user),
 ) -> list[dict]:
     effective_user_id = user["user_id"] if user["auth_type"] == "jwt" else user_id
+    if year is None:
+        year = datetime.now().year
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             if effective_user_id:

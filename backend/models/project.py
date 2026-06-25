@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 
 class ProjectCreate(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
     title: str
     category: str
     status: str = "active"

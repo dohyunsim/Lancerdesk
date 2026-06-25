@@ -47,6 +47,8 @@ def get_project(
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Project not found")
+            if user["auth_type"] == "jwt" and str(row["user_id"]) != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Forbidden")
             return dict(row)
 
 
@@ -105,10 +107,15 @@ def update_project(
         raise HTTPException(status_code=400, detail="No fields to update")
 
     values.append(str(project_id))
+    if user["auth_type"] == "jwt":
+        values.append(user["user_id"])
+        user_clause = " AND user_id = %s"
+    else:
+        user_clause = ""
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                f"UPDATE projects SET {', '.join(fields)} WHERE id = %s RETURNING *",
+                f"UPDATE projects SET {', '.join(fields)} WHERE id = %s{user_clause} RETURNING *",
                 values,
             )
             row = cur.fetchone()
@@ -122,7 +129,15 @@ def delete_project(
     project_id: UUID,
     user: dict = Depends(get_current_user),
 ) -> Response:
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM projects WHERE id = %s", (str(project_id),))
+    if user["auth_type"] == "jwt":
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM projects WHERE id = %s AND user_id = %s",
+                    (str(project_id), user["user_id"]),
+                )
+    else:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM projects WHERE id = %s", (str(project_id),))
     return Response(status_code=204)

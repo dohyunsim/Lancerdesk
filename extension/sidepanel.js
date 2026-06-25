@@ -150,7 +150,11 @@ logoutBtn.addEventListener("click", () => {
 
 // 대시보드 FAB → 새 탭으로 대시보드 열기
 dashboardFab.addEventListener("click", () => {
-  chrome.tabs.create({ url: DASHBOARD_URL });
+  chrome.tabs.create({ url: DASHBOARD_URL }, () => {
+    if (chrome.runtime.lastError) {
+      console.error("대시보드 열기 실패:", chrome.runtime.lastError.message);
+    }
+  });
 });
 
 // ─── Chat data from content script ───────────────────────────────────────────
@@ -423,13 +427,25 @@ async function loadConversations() {
       return;
     }
 
+    const now = Date.now();
+    const HOURS_48_MS = 48 * 60 * 60 * 1000;
+    const recent = deduped.filter((conv) => {
+      const lastActivity = new Date(conv.updated_at || conv.created_at).getTime();
+      return !isNaN(lastActivity) && (now - lastActivity) <= HOURS_48_MS;
+    });
+
+    if (!recent.length) {
+      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
+      return;
+    }
+
     const fmtDate = (iso) => {
       if (!iso) return "-";
       const d = new Date(iso);
       return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
     };
 
-    conversationList.innerHTML = deduped.slice(0, 15).map((conv) => {
+    conversationList.innerHTML = recent.slice(0, 15).map((conv) => {
       const name      = conv.client_name || "고객명 미확인";
       const cat       = conv.category    || "general";
       const firstDate = fmtDate(conv.created_at);

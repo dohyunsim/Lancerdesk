@@ -7,7 +7,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next()
-  if (pathname.startsWith('/_next') || pathname.startsWith('/api/auth')) return NextResponse.next()
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api/auth') || pathname.startsWith('/api/proxy')) return NextResponse.next()
 
   const token = request.cookies.get('ld_token')?.value
   if (!token) {

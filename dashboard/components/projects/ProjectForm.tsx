@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Project } from "@/lib/api";
 
-type ProjectFormData = Omit<Project, "id" | "created_at" | "updated_at">;
+type ProjectFormData = Omit<Project, "id" | "created_at" | "updated_at" | "user_id">;
 
 interface ProjectFormProps {
   initialData?: Project | null;
@@ -36,7 +36,6 @@ export default function ProjectForm({
   onCancel,
 }: ProjectFormProps) {
   const [form, setForm] = useState<ProjectFormData>({
-    user_id: initialData?.user_id ?? "",
     title: initialData?.title ?? "",
     category: initialData?.category ?? "general",
     status: initialData?.status ?? "active",

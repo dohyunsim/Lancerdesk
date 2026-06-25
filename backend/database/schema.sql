@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     project_id  UUID REFERENCES projects(id) ON DELETE SET NULL,
     soomgo_url  TEXT NOT NULL DEFAULT '',
     category    TEXT NOT NULL DEFAULT 'general',
+    client_name TEXT NOT NULL DEFAULT '',
+    client_id   TEXT NOT NULL DEFAULT '',
     messages    JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()

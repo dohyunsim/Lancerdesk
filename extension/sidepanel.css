@@ -304,6 +304,10 @@ body {
   padding: 10px 16px 12px;
   background: linear-gradient(to top, var(--surface) 70%, transparent);
   z-index: 100;
+  pointer-events: none;
+}
+.bottom-bar .ref-fab {
+  pointer-events: auto;
 }
 .ref-fab {
   display: flex;

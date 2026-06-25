@@ -1,28 +1,22 @@
 // Lancerdesk Dashboard — Backend API client
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY =
-  process.env.API_KEY || process.env.NEXT_PUBLIC_API_KEY || ''
+const API_URL = '/api/proxy'
 
-function getHeaders(token?: string): HeadersInit {
+function getHeaders(): HeadersInit {
   return {
     'Content-Type': 'application/json',
-    'x-api-key': API_KEY,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {},
-  token?: string
+  options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_URL}${path}`
   const response = await fetch(url, {
     ...options,
     headers: {
-      ...getHeaders(token),
+      ...getHeaders(),
       ...(options.headers ?? {}),
     },
   })
@@ -56,6 +50,8 @@ export interface Conversation {
   project_id: string | null
   soomgo_url: string
   category: string
+  client_name: string
+  client_id: string
   messages: Array<{ role: string; content: string; timestamp: string }>
   created_at: string
   updated_at: string
@@ -78,50 +74,48 @@ export interface MonthlyData {
 // ─── Projects API ─────────────────────────────────────────────────────────────
 
 export const projectsApi = {
-  list: (userId?: string, token?: string): Promise<Project[]> => {
+  list: (userId?: string): Promise<Project[]> => {
     const qs = userId ? `?user_id=${userId}` : ''
-    return request<Project[]>(`/projects${qs}`, {}, token)
+    return request<Project[]>(`/projects${qs}`)
   },
-  get: (id: string, token?: string): Promise<Project> =>
-    request<Project>(`/projects/${id}`, {}, token),
+  get: (id: string): Promise<Project> =>
+    request<Project>(`/projects/${id}`),
   create: (
-    data: Omit<Project, 'id' | 'created_at' | 'updated_at'>,
-    token?: string
+    data: Omit<Project, 'id' | 'created_at' | 'updated_at' | 'user_id'>
   ): Promise<Project> =>
-    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }, token),
-  update: (id: string, data: Partial<Project>, token?: string): Promise<Project> =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Project>): Promise<Project> =>
     request<Project>(
       `/projects/${id}`,
-      { method: 'PATCH', body: JSON.stringify(data) },
-      token
+      { method: 'PATCH', body: JSON.stringify(data) }
     ),
-  delete: (id: string, token?: string): Promise<void> =>
-    request<void>(`/projects/${id}`, { method: 'DELETE' }, token),
+  delete: (id: string): Promise<void> =>
+    request<void>(`/projects/${id}`, { method: 'DELETE' }),
 }
 
 // ─── Conversations API ────────────────────────────────────────────────────────
 
 export const conversationsApi = {
-  list: (userId?: string, token?: string): Promise<Conversation[]> => {
+  list: (userId?: string): Promise<Conversation[]> => {
     const qs = userId ? `?user_id=${userId}` : ''
-    return request<Conversation[]>(`/conversations${qs}`, {}, token)
+    return request<Conversation[]>(`/conversations${qs}`)
   },
-  get: (id: string, token?: string): Promise<Conversation> =>
-    request<Conversation>(`/conversations/${id}`, {}, token),
-  delete: (id: string, token?: string): Promise<void> =>
-    request<void>(`/conversations/${id}`, { method: 'DELETE' }, token),
+  get: (id: string): Promise<Conversation> =>
+    request<Conversation>(`/conversations/${id}`),
+  delete: (id: string): Promise<void> =>
+    request<void>(`/conversations/${id}`, { method: 'DELETE' }),
 }
 
 // ─── Analytics API ────────────────────────────────────────────────────────────
 
 export const analyticsApi = {
-  summary: (userId?: string, token?: string): Promise<AnalyticsSummary> => {
+  summary: (userId?: string): Promise<AnalyticsSummary> => {
     const qs = userId ? `?user_id=${userId}` : ''
-    return request<AnalyticsSummary>(`/analytics/summary${qs}`, {}, token)
+    return request<AnalyticsSummary>(`/analytics/summary${qs}`)
   },
-  monthly: (year: number, userId?: string, token?: string): Promise<MonthlyData[]> => {
+  monthly: (year: number, userId?: string): Promise<MonthlyData[]> => {
     const params = new URLSearchParams({ year: String(year) })
     if (userId) params.set('user_id', userId)
-    return request<MonthlyData[]>(`/analytics/monthly?${params.toString()}`, {}, token)
+    return request<MonthlyData[]>(`/analytics/monthly?${params.toString()}`)
   },
 }
