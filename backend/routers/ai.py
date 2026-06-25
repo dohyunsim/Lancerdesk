@@ -21,6 +21,7 @@ def suggest_reply(
             conversation_messages=payload.messages,
             category=payload.category,
             context=payload.context,
+            style_prompt=payload.style_prompt,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(exc)}") from exc

@@ -56,35 +56,74 @@ function detectCategory(text) {
 }
 
 /**
- * Extract client/room ID and name from the current soomgo.com URL and page.
- * @returns {{ clientId: string|null, clientName: string|null }}
+ * Detect category from a DOM label string.
+ * @param {string} label - Category label text from DOM
+ * @returns {string} - Category key or 'general'
+ */
+function detectCategoryFromLabel(label) {
+  const lower = label.toLowerCase();
+  for (const [key, config] of Object.entries(CATEGORY_CONFIG)) {
+    if (config.keywords.some((kw) => lower.includes(kw))) return key;
+  }
+  return "general";
+}
+
+/**
+ * Extract client/room ID, name, and DOM category from the current soomgo.com URL and page.
+ * @returns {{ clientId: string|null, clientName: string|null, domCategory: string|null }}
  */
 function extractClientInfo() {
   const url = window.location.href;
-
-  // Soomgo URL 패턴에서 숫자 ID 추출 (예: /chat/rooms/12345, /messages/12345)
   const idMatch = url.match(/\/(\d{4,})/g);
   const clientId = idMatch ? idMatch[idMatch.length - 1].replace("/", "") : null;
 
-  // 페이지에서 상대방 이름 추출 시도
+  // 고객명: 숨고 React 앱 다중 셀렉터
   const nameSelectors = [
+    "[class*='ChatRoomHeader'] [class*='name']",
+    "[class*='ChatHeader'] [class*='Name']",
+    "[class*='RoomHeader'] h2",
+    "[class*='RoomHeader'] h1",
+    "[class*='UserName']",
+    "[class*='clientName']",
+    "[class*='ClientName']",
+    "[class*='profile'] [class*='name']",
+    "[class*='Profile'] [class*='name']",
     "[class*='partner']",
     "[class*='opponent']",
     "[class*='other-user']",
     "[class*='sender-name']",
-    "[class*='username']",
-    "[class*='nickname']",
   ];
   let clientName = null;
   for (const sel of nameSelectors) {
     const el = document.querySelector(sel);
-    if (el && el.textContent.trim()) {
-      clientName = el.textContent.trim().slice(0, 30);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 0 && text.length < 20) {
+      clientName = text;
       break;
     }
   }
 
-  return { clientId, clientName };
+  // 카테고리 DOM 직접 추출
+  const categorySelectors = [
+    "[class*='ServiceCategory']",
+    "[class*='serviceCategory']",
+    "[class*='service-category']",
+    "[class*='RequestCategory']",
+    "[class*='CategoryName']",
+    "[class*='category-label']",
+    "[class*='categoryName']",
+  ];
+  let domCategory = null;
+  for (const sel of categorySelectors) {
+    const el = document.querySelector(sel);
+    const text = el?.textContent?.trim();
+    if (text && text.length > 0 && text.length < 50) {
+      domCategory = text;
+      break;
+    }
+  }
+
+  return { clientId, clientName, domCategory };
 }
 
 /**
@@ -113,7 +152,7 @@ function scrapeChatMessages() {
     }
   }
 
-  const { clientId, clientName } = extractClientInfo();
+  const { clientId, clientName, domCategory } = extractClientInfo();
 
   if (messageElements.length === 0) {
     // 메시지 셀렉터 매칭 실패해도 URL·고객 정보는 반환
@@ -123,6 +162,7 @@ function scrapeChatMessages() {
       category: "general",
       clientId,
       clientName,
+      domCategory,
     };
   }
 
@@ -151,7 +191,7 @@ function scrapeChatMessages() {
   }).filter((m) => m.content.length > 0);
 
   const fullText = messages.map((m) => m.content).join(" ");
-  const category = detectCategory(fullText);
+  const category = domCategory ? detectCategoryFromLabel(domCategory) : detectCategory(fullText);
 
   return {
     messages,
@@ -159,6 +199,7 @@ function scrapeChatMessages() {
     category,
     clientId,
     clientName,
+    domCategory,
   };
 }
 

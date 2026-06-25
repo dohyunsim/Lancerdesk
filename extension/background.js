@@ -41,46 +41,74 @@ async function apiRequest(path, options = {}) {
 
 /**
  * Save or update a conversation in the backend.
- * @param {object} chatData - { messages, url, category }
+ * URL 기반 3단계 재사용 로직:
+ *   1. chrome.storage URL→ID 캐시 확인
+ *   2. 백엔드에서 soomgo_url로 기존 대화 조회
+ *   3. 새 대화 생성
+ * @param {object} chatData - { messages, url, category, clientId, clientName }
  * @returns {Promise<object>}
  */
 async function saveConversation(chatData) {
-  const stored = await new Promise((resolve) => {
-    chrome.storage.local.get(["currentConversationId"], resolve);
-  });
-
   const token = await getJwtToken();
   if (!token) {
-    console.warn("[Lancerdesk] No JWT token stored. Please log in via the sidepanel.");
+    console.warn("[Lancerdesk] No JWT token. Please log in.");
     return null;
   }
 
-  // If we already have a conversation for this URL, append messages
-  const existingId = stored.currentConversationId;
-  if (existingId) {
-    // Append the last message only to avoid duplicates
+  const soomgoUrl = chatData.url.split("?")[0];
+
+  // 1단계: chrome.storage URL→ID 캐시 확인
+  const stored = await new Promise((resolve) =>
+    chrome.storage.local.get(["urlConvMap"], resolve)
+  );
+  const urlConvMap = stored.urlConvMap || {};
+  const cachedId = urlConvMap[soomgoUrl];
+
+  if (cachedId) {
     const lastMsg = chatData.messages[chatData.messages.length - 1];
     if (lastMsg) {
-      await apiRequest(`/conversations/${existingId}/messages`, {
+      await apiRequest(`/conversations/${cachedId}/messages`, {
         method: "POST",
         body: JSON.stringify(lastMsg),
       });
     }
-    return { id: existingId };
+    chrome.storage.local.set({ currentConversationId: cachedId });
+    return { id: cachedId };
   }
 
-  // Create a new conversation
+  // 2단계: 백엔드에서 soomgo_url로 기존 대화 조회
+  try {
+    const existing = await apiRequest(
+      `/conversations?soomgo_url=${encodeURIComponent(soomgoUrl)}`
+    );
+    if (existing && existing.length > 0) {
+      const existingId = existing[0].id;
+      urlConvMap[soomgoUrl] = existingId;
+      chrome.storage.local.set({ urlConvMap, currentConversationId: existingId });
+      const lastMsg = chatData.messages[chatData.messages.length - 1];
+      if (lastMsg) {
+        await apiRequest(`/conversations/${existingId}/messages`, {
+          method: "POST",
+          body: JSON.stringify(lastMsg),
+        });
+      }
+      return { id: existingId };
+    }
+  } catch (_) { /* fallthrough */ }
+
+  // 3단계: 새 대화 생성
   const conversation = await apiRequest("/conversations", {
     method: "POST",
     body: JSON.stringify({
-      soomgo_url: chatData.url,
+      soomgo_url: soomgoUrl,
       category: chatData.category,
+      client_name: chatData.clientName || "",
+      client_id: chatData.clientId || "",
       messages: chatData.messages,
     }),
   });
-
-  // Cache the conversation ID for subsequent appends
-  chrome.storage.local.set({ currentConversationId: conversation.id });
+  urlConvMap[soomgoUrl] = conversation.id;
+  chrome.storage.local.set({ urlConvMap, currentConversationId: conversation.id });
   return conversation;
 }
 
@@ -89,12 +117,13 @@ async function saveConversation(chatData) {
  * @param {string} conversationId
  * @param {Array} messages
  * @param {string} category
+ * @param {string} stylePrompt
  * @returns {Promise<string>}
  */
-async function getAISuggestion(conversationId, messages, category) {
+async function getAISuggestion(conversationId, messages, category, stylePrompt = "") {
   const result = await apiRequest("/ai/suggest", {
     method: "POST",
-    body: JSON.stringify({ conversation_id: conversationId, messages, category }),
+    body: JSON.stringify({ conversation_id: conversationId, messages, category, style_prompt: stylePrompt }),
   });
   return result.suggestion;
 }
@@ -128,8 +157,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (type === "GET_AI_SUGGESTION") {
-    const { conversationId, messages, category } = payload;
-    getAISuggestion(conversationId, messages, category)
+    const { conversationId, messages, category, stylePrompt } = payload;
+    getAISuggestion(conversationId, messages, category, stylePrompt)
       .then((suggestion) => sendResponse({ success: true, suggestion }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;

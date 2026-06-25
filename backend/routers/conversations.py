@@ -16,13 +16,18 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 @router.get("", response_model=list[dict])
 def list_conversations(
-    user_id: str | None = None,
+    soomgo_url: str | None = None,
     user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    effective_user_id = user["user_id"] if user["auth_type"] == "jwt" else user_id
+    effective_user_id = user["user_id"] if user["auth_type"] == "jwt" else None
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if effective_user_id:
+            if soomgo_url and effective_user_id:
+                cur.execute(
+                    "SELECT * FROM conversations WHERE user_id = %s AND soomgo_url = %s ORDER BY created_at DESC",
+                    (effective_user_id, soomgo_url),
+                )
+            elif effective_user_id:
                 cur.execute(
                     "SELECT * FROM conversations WHERE user_id = %s ORDER BY created_at DESC",
                     (effective_user_id,),
@@ -57,8 +62,9 @@ def create_conversation(
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """
-                INSERT INTO conversations (user_id, project_id, soomgo_url, category, messages)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO conversations
+                  (user_id, project_id, soomgo_url, category, client_name, client_id, messages)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -66,6 +72,8 @@ def create_conversation(
                     str(payload.project_id) if payload.project_id else None,
                     payload.soomgo_url,
                     payload.category,
+                    payload.client_name,
+                    payload.client_id,
                     json.dumps(payload.messages),
                 ),
             )

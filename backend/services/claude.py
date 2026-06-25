@@ -17,6 +17,7 @@ def generate_reply_suggestion(
     conversation_messages: list[dict],
     category: str,
     context: str = "",
+    style_prompt: str = "",
 ) -> str:
     """
     Generate an AI reply suggestion for a freelancer responding to a client on soomgo.com.
@@ -25,11 +26,14 @@ def generate_reply_suggestion(
         conversation_messages: List of message dicts with role/content
         category: Detected category (e.g., 'ppt', 'design', 'general')
         context: Additional context about the project or freelancer
+        style_prompt: Optional style instruction for the reply
 
     Returns:
         A suggested reply string
     """
     client = get_claude()
+
+    style_instruction = f"\n\n[답변 스타일 지침]\n{style_prompt}" if style_prompt else ""
 
     system_prompt = f"""당신은 숨고(soomgo.com) 플랫폼의 프리랜서를 돕는 AI 비서입니다.
 프리랜서가 클라이언트에게 보낼 답변을 작성하는 것을 도와줍니다.
@@ -42,7 +46,7 @@ def generate_reply_suggestion(
 - 클라이언트의 요구사항을 정확히 이해했음을 보여주세요
 - 구체적인 작업 가능 여부, 예상 기간, 비용 등을 간략히 언급하세요
 - 한국어로 작성하세요
-- 200자 이내로 간결하게 작성하세요"""
+- 200자 이내로 간결하게 작성하세요{style_instruction}"""
 
     # Build messages from conversation history
     messages = []

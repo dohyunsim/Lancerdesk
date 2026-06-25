@@ -47,6 +47,27 @@
         <p id="chat-category">카테고리: -</p>
         <p id="chat-message-count">메시지 수: -</p>
       </div>
+      <div id="style-section" style="margin-top:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;">답변 스타일</span>
+          <button id="add-style-btn" class="btn btn-outline btn-sm">+ 추가</button>
+        </div>
+        <div id="style-list" class="style-list"></div>
+        <div id="add-style-form" class="add-style-form hidden">
+          <div class="form-group">
+            <label for="style-name-input">스타일 이름</label>
+            <input type="text" id="style-name-input" placeholder="예: 친근하게" />
+          </div>
+          <div class="form-group">
+            <label for="style-prompt-input">프롬프트 지침</label>
+            <textarea id="style-prompt-input" rows="2" placeholder="예: 친근하고 편안한 말투로 작성해주세요"></textarea>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button id="save-style-btn" class="btn btn-primary" style="flex:1;margin-top:0;">저장</button>
+            <button id="cancel-style-btn" class="btn btn-outline" style="flex:1;">취소</button>
+          </div>
+        </div>
+      </div>
       <button id="get-suggestion-btn" class="btn btn-accent">
         AI 답변 추천 받기
       </button>

@@ -18,6 +18,8 @@ class ConversationCreate(BaseModel):
     project_id: UUID | None = None
     soomgo_url: str = ""
     category: str = "general"
+    client_name: str = ""
+    client_id: str = ""
     messages: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -39,6 +41,8 @@ class ConversationResponse(BaseModel):
     project_id: UUID | None
     soomgo_url: str
     category: str
+    client_name: str = ""
+    client_id: str = ""
     messages: list[dict[str, Any]]
     created_at: datetime
     updated_at: datetime

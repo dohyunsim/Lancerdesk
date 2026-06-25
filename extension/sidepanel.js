@@ -17,6 +17,14 @@ const chatClientName = document.getElementById("chat-client-name");
 const chatCategory = document.getElementById("chat-category");
 const chatMessageCount = document.getElementById("chat-message-count");
 
+const styleList = document.getElementById("style-list");
+const addStyleBtn = document.getElementById("add-style-btn");
+const addStyleForm = document.getElementById("add-style-form");
+const styleNameInput = document.getElementById("style-name-input");
+const stylePromptInput = document.getElementById("style-prompt-input");
+const saveStyleBtn = document.getElementById("save-style-btn");
+const cancelStyleBtn = document.getElementById("cancel-style-btn");
+
 const getSuggestionBtn = document.getElementById("get-suggestion-btn");
 const suggestionBox = document.getElementById("suggestion-box");
 const suggestionText = document.getElementById("suggestion-text");
@@ -30,6 +38,7 @@ const conversationList = document.getElementById("conversation-list");
 // ─── State ───────────────────────────────────────────────────────────────────
 let currentChatData = null;
 let currentConversationId = null;
+let selectedStyleId = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function setStatus(state) {
@@ -163,6 +172,10 @@ getSuggestionBtn.addEventListener("click", async () => {
   aiLoading.classList.remove("hidden");
   getSuggestionBtn.disabled = true;
 
+  const styles = await loadStyles();
+  const selected = styles.find((s) => s.id === selectedStyleId);
+  const stylePrompt = selected ? selected.prompt : "";
+
   chrome.runtime.sendMessage(
     {
       type: "GET_AI_SUGGESTION",
@@ -170,6 +183,7 @@ getSuggestionBtn.addEventListener("click", async () => {
         conversationId: currentConversationId,
         messages: currentChatData.messages,
         category: currentChatData.category,
+        stylePrompt,
       },
     },
     (response) => {
@@ -220,14 +234,24 @@ async function loadConversations() {
 
       conversationList.innerHTML = response.data
         .slice(0, 10)
-        .map(
-          (conv) => `
-          <li class="conv-item">
-            <span class="conv-category badge">${conv.category}</span>
-            <span class="conv-date">${new Date(conv.created_at).toLocaleDateString("ko-KR")}</span>
-            <span class="conv-count">${(conv.messages || []).length}개 메시지</span>
-          </li>`
-        )
+        .map((conv) => {
+          const name = conv.client_name || "이름 없음";
+          const cid = conv.client_id || "-";
+          const msgCount = (conv.messages || []).length;
+          const range = msgCount > 0 ? `1~${msgCount}번 메시지` : "메시지 없음";
+          const date = new Date(conv.created_at).toLocaleDateString("ko-KR");
+          return `
+            <li class="conv-item">
+              <div class="conv-main">
+                <span class="conv-client-name">${name}</span>
+                <span class="conv-client-id">ID: ${cid}</span>
+              </div>
+              <div class="conv-sub">
+                <span class="conv-range">${range}</span>
+                <span class="conv-date">${date}</span>
+              </div>
+            </li>`;
+        })
         .join("");
     }
   );
@@ -235,11 +259,74 @@ async function loadConversations() {
 
 refreshBtn.addEventListener("click", loadConversations);
 
+// ─── Reply Styles ─────────────────────────────────────────────────────────────
+const DEFAULT_STYLES = [
+  { id: "friendly",     name: "친근하게",   prompt: "친근하고 편안한 말투로, 자연스럽게 작성해주세요." },
+  { id: "professional", name: "전문적으로", prompt: "전문적이고 신뢰감 있는 톤으로 격식 있게 작성해주세요." },
+  { id: "short",        name: "짧게",       prompt: "핵심만 담아 100자 이내로 간결하게 작성해주세요." },
+];
+
+async function loadStyles() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get(["replyStyles"], (r) => resolve(r.replyStyles || DEFAULT_STYLES))
+  );
+}
+
+async function saveStyles(styles) {
+  return new Promise((resolve) => chrome.storage.local.set({ replyStyles: styles }, resolve));
+}
+
+async function renderStyles() {
+  const styles = await loadStyles();
+  styleList.innerHTML = styles.map((s) => `
+    <div class="style-item ${s.id === selectedStyleId ? "selected" : ""}"
+         data-id="${s.id}" data-prompt="${s.prompt.replace(/"/g, "&quot;")}">
+      <span class="style-item-name">${s.name}</span>
+      <button class="style-delete-btn" data-id="${s.id}" title="삭제">×</button>
+    </div>`).join("");
+
+  styleList.querySelectorAll(".style-item").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.classList.contains("style-delete-btn")) return;
+      selectedStyleId = selectedStyleId === el.dataset.id ? null : el.dataset.id;
+      renderStyles();
+    });
+  });
+
+  styleList.querySelectorAll(".style-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const styles = await loadStyles();
+      await saveStyles(styles.filter((s) => s.id !== btn.dataset.id));
+      if (selectedStyleId === btn.dataset.id) selectedStyleId = null;
+      renderStyles();
+    });
+  });
+}
+
+addStyleBtn.addEventListener("click", () => {
+  addStyleForm.classList.toggle("hidden");
+  styleNameInput.value = "";
+  stylePromptInput.value = "";
+});
+cancelStyleBtn.addEventListener("click", () => addStyleForm.classList.add("hidden"));
+saveStyleBtn.addEventListener("click", async () => {
+  const name = styleNameInput.value.trim();
+  const prompt = stylePromptInput.value.trim();
+  if (!name || !prompt) return;
+  const styles = await loadStyles();
+  styles.push({ id: `custom_${Date.now()}`, name, prompt });
+  await saveStyles(styles);
+  addStyleForm.classList.add("hidden");
+  renderStyles();
+});
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
   await checkAuthState();
   await fetchChatData();
   await loadConversations();
+  await renderStyles();
 
   chrome.runtime.sendMessage({ type: "GET_CURRENT_CONVERSATION" }, (res) => {
     currentConversationId = res?.conversationId || null;

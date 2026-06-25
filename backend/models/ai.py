@@ -12,6 +12,7 @@ class AISuggestRequest(BaseModel):
     messages: list[dict[str, Any]]
     category: str = "general"
     context: str = ""
+    style_prompt: str = ""
 
 
 class AISuggestResponse(BaseModel):
