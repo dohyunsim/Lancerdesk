@@ -1,0 +1,52 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import clsx from "clsx";
+
+const navItems = [
+  { href: "/", label: "대시보드" },
+  { href: "/projects", label: "프로젝트" },
+  { href: "/conversations", label: "대화 목록" },
+  { href: "/analytics", label: "분석" },
+];
+
+export default function Sidebar() {
+  const pathname = usePathname();
+
+  return (
+    <aside className="w-52 bg-gray-900 text-gray-100 flex flex-col flex-shrink-0">
+      <div className="px-5 py-5 border-b border-gray-700">
+        <h1 className="text-lg font-bold tracking-tight text-white">
+          Lancerdesk
+        </h1>
+        <p className="text-xs text-gray-400 mt-0.5">숨고 프리랜서 CRM</p>
+      </div>
+
+      <nav className="flex-1 px-3 py-4 space-y-1">
+        {navItems.map(({ href, label }) => {
+          const isActive =
+            href === "/" ? pathname === "/" : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={clsx(
+                "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-400 hover:bg-gray-800 hover:text-gray-100"
+              )}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="px-5 py-4 border-t border-gray-700 text-xs text-gray-500">
+        v1.0.0
+      </div>
+    </aside>
+  );
+}

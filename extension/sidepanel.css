@@ -1,0 +1,281 @@
+/* Lancerdesk Side Panel Styles */
+
+:root {
+  --primary: #4f46e5;
+  --primary-dark: #3730a3;
+  --accent: #10b981;
+  --accent-dark: #059669;
+  --danger: #ef4444;
+  --bg: #f9fafb;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 320px;
+  max-width: 400px;
+}
+
+#app {
+  padding: 0 0 24px;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--primary);
+  color: #fff;
+}
+
+.logo {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.status-idle { background: #9ca3af; }
+.status-active { background: var(--accent); }
+.status-error { background: var(--danger); }
+
+/* ─── Section ────────────────────────────────────────────────────────────── */
+.section {
+  padding: 14px 16px;
+  background: var(--surface);
+  margin: 8px 10px 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  display: none;
+}
+
+/* ─── Form ───────────────────────────────────────────────────────────────── */
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-group input:focus {
+  border-color: var(--primary);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.btn-accent:hover:not(:disabled) { background: var(--accent-dark); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.btn-outline:hover:not(:disabled) { background: #eef2ff; }
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* ─── Meta Box ───────────────────────────────────────────────────────────── */
+.meta-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Suggestion Box ─────────────────────────────────────────────────────── */
+.suggestion-box {
+  margin-top: 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.suggestion-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  margin-bottom: 6px;
+}
+
+#suggestion-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #065f46;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────────── */
+.loading-msg {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.error-msg {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--danger);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* ─── Conversation List ──────────────────────────────────────────────────── */
+.conversation-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.conv-category.badge {
+  background: #ede9fe;
+  color: var(--primary-dark);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.conv-date { flex-shrink: 0; }
+.conv-count { margin-left: auto; white-space: nowrap; }
+
+.empty-msg {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }

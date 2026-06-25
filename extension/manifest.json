@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Lancerdesk",
+  "version": "1.0.0",
+  "description": "AI-powered CRM for soomgo.com freelancers",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://soomgo.com/*",
+    "https://*.soomgo.com/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://soomgo.com/*",
+        "https://*.soomgo.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Lancerdesk",
+    "default_popup": ""
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
