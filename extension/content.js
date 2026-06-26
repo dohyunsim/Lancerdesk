@@ -97,14 +97,28 @@ function extractClientInfo() {
     if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
   }
 
+  // UI 텍스트로 오인될 수 있는 단어 블록리스트
+  const UI_BLOCKLIST = new Set([
+    "로그아웃", "로그인", "마이페이지", "고객센터", "알림설정",
+    "전체보기", "더보기", "닫기", "취소", "확인", "저장", "삭제",
+    "설정", "홈", "검색", "채팅", "알림", "프로필", "메뉴",
+    "스마트건", "인터넷가입", "커뮤니티", "고수찾기", "받은요청",
+  ]);
+
+  // 이름 판별 정규식: 순수 한글(2-8자) 또는 영문+한글 혼합(J기획 등)
+  function isClientName(t) {
+    if (UI_BLOCKLIST.has(t)) return false;
+    return /^[가-힣]{2,8}$/.test(t) || /^[A-Za-z0-9][가-힣]{1,7}$/.test(t) || /^[가-힣]{1,7}[A-Za-z0-9]$/.test(t);
+  }
+
   // 고객명: "N시간 전 접속" 텍스트에서 가장 가까운 이전 한국어 이름을 역방향으로 탐색
   let clientName = null;
   for (let i = 0; i < textNodes.length; i++) {
     if (textNodes[i].text.match(/\d+(시간|분|일|초)\s*전\s*접속/)) {
-      // 역방향 탐색: 바로 앞 노드부터 최대 15개, 공백 없는 순수 한국어 이름 우선
+      // 역방향 탐색: 바로 앞 노드부터 최대 15개
       for (let j = i - 1; j >= Math.max(0, i - 15); j--) {
         const t = textNodes[j].text;
-        if (/^[가-힣]{2,8}$/.test(t)) {
+        if (isClientName(t)) {
           clientName = t;
           break;
         }
@@ -113,11 +127,11 @@ function extractClientInfo() {
     }
   }
 
-  // 폴백: 상단 heading 요소에서 한국어 이름 탐색
+  // 폴백: 상단 heading 요소에서 이름 탐색
   if (!clientName) {
     for (const h of document.querySelectorAll("h1,h2,h3,h4")) {
       const t = h.textContent?.trim() || "";
-      if (/^[가-힣]{2,8}$/.test(t)) { clientName = t; break; }
+      if (isClientName(t)) { clientName = t; break; }
     }
   }
 
