@@ -97,41 +97,61 @@ function extractClientInfo() {
     if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
   }
 
-  // UI 텍스트로 오인될 수 있는 단어 블록리스트
+  // UI 텍스트 블록리스트
   const UI_BLOCKLIST = new Set([
     "로그아웃", "로그인", "마이페이지", "고객센터", "알림설정",
     "전체보기", "더보기", "닫기", "취소", "확인", "저장", "삭제",
     "설정", "홈", "검색", "채팅", "알림", "프로필", "메뉴",
     "스마트건", "인터넷가입", "커뮤니티", "고수찾기", "받은요청",
+    "고객전환", "고용요청", "숨고페이", "일정등록", "견적요청",
+    "고객요청", "거래상세", "신고하기", "차단하기", "미접속",
+    "숨고페이요청", "고용 요청", "일정 등록", "스마트 견적",
   ]);
 
-  // 이름 판별 정규식: 순수 한글(2-8자) 또는 영문+한글 혼합(J기획 등)
-  function isClientName(t) {
+  // 이름 후보 판별: 블록리스트 제외, 타임스탬프/숫자 제외, 한글 또는 영문 포함
+  function isNameCandidate(t) {
+    if (!t || t.length < 2 || t.length > 20) return false;
+    if (UI_BLOCKLIST.has(t.replace(/\s/g, ""))) return false;
     if (UI_BLOCKLIST.has(t)) return false;
-    return /^[가-힣]{2,8}$/.test(t) || /^[A-Za-z0-9][가-힣]{1,7}$/.test(t) || /^[가-힣]{1,7}[A-Za-z0-9]$/.test(t);
+    if (/^\d/.test(t)) return false;
+    if (/\d+(시간|분|일|초)/.test(t)) return false;
+    if (/^(오[전후]|AM|PM|\d{1,2}:\d{2})/.test(t)) return false;
+    if (/^[0-9\s\-_\.]+$/.test(t)) return false;
+    return /[가-힣A-Za-z]/.test(t);
   }
 
-  // 고객명: "N시간 전 접속" 텍스트에서 가장 가까운 이전 한국어 이름을 역방향으로 탐색
+  // 고객명: "N시간 전 접속" 요소의 가까운 컨테이너(조상 순회)에서 이름 탐색
+  // 전역 역방향 스캔 대신 좁은 DOM 컨텍스트만 탐색 → UI 단어 오인 방지
   let clientName = null;
-  for (let i = 0; i < textNodes.length; i++) {
-    if (textNodes[i].text.match(/\d+(시간|분|일|초)\s*전\s*접속/)) {
-      // 역방향 탐색: 바로 앞 노드부터 최대 15개
-      for (let j = i - 1; j >= Math.max(0, i - 15); j--) {
-        const t = textNodes[j].text;
-        if (isClientName(t)) {
-          clientName = t;
-          break;
+  {
+    let accessEl = null;
+    for (const { text, el } of textNodes) {
+      if (/\d+(시간|분|일|초)\s*전\s*접속/.test(text)) { accessEl = el; break; }
+    }
+    if (accessEl) {
+      let container = accessEl.parentElement;
+      for (let depth = 0; depth < 7 && container && !clientName; depth++) {
+        const innerTexts = [];
+        const w = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        while (w.nextNode()) {
+          const t = (w.currentNode.textContent || "").trim();
+          if (t) innerTexts.push(t);
         }
+        const candidates = innerTexts.filter(isNameCandidate);
+        // 후보가 1~4개인 컨테이너: 좁아서 UI 텍스트가 섞이지 않음
+        if (candidates.length >= 1 && candidates.length <= 4) {
+          clientName = candidates[0];
+        }
+        container = container.parentElement;
       }
-      break;
     }
   }
 
-  // 폴백: 상단 heading 요소에서 이름 탐색
+  // 폴백: heading 요소에서 이름 탐색
   if (!clientName) {
     for (const h of document.querySelectorAll("h1,h2,h3,h4")) {
       const t = h.textContent?.trim() || "";
-      if (isClientName(t)) { clientName = t; break; }
+      if (isNameCandidate(t)) { clientName = t; break; }
     }
   }
 
