@@ -248,6 +248,14 @@ function scrapeChatMessages() {
 /**
  * Watch for chat DOM changes and notify the background worker.
  */
+function sendSafe(message) {
+  try {
+    chrome.runtime.sendMessage(message);
+  } catch (e) {
+    // 익스텐션 리로드 후 컨텍스트 무효화 — 무시
+  }
+}
+
 function startObserving() {
   const targetNode = document.body;
   if (!targetNode) return;
@@ -255,14 +263,16 @@ function startObserving() {
   let debounceTimer = null;
 
   const observer = new MutationObserver(() => {
+    // 컨텍스트가 무효화됐으면 observer 중단
+    if (!chrome.runtime?.id) {
+      observer.disconnect();
+      return;
+    }
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       const data = scrapeChatMessages();
       if (data && data.messages.length > 0) {
-        chrome.runtime.sendMessage({
-          type: "CHAT_UPDATED",
-          payload: data,
-        });
+        sendSafe({ type: "CHAT_UPDATED", payload: data });
       }
     }, 800);
   });
@@ -278,10 +288,7 @@ if (isChatPage()) {
   // Initial scrape on load
   const initialData = scrapeChatMessages();
   if (initialData && initialData.messages.length > 0) {
-    chrome.runtime.sendMessage({
-      type: "CHAT_UPDATED",
-      payload: initialData,
-    });
+    sendSafe({ type: "CHAT_UPDATED", payload: initialData });
   }
 
   // Start watching for changes
@@ -336,7 +343,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SCROLL_AND_CRAWL") {
     scrollToTopAndCrawl().then((data) => {
       // 완료 후 사이드패널로 전송
-      chrome.runtime.sendMessage({ type: "CHAT_UPDATED", payload: data });
+      sendSafe({ type: "CHAT_UPDATED", payload: data });
       sendResponse({ success: true, data });
     });
     return true;
