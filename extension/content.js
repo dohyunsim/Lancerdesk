@@ -89,49 +89,24 @@ function extractClientInfo() {
     ? pathNumbers[pathNumbers.length - 1].slice(1)
     : null;
 
-  // TreeWalker로 전체 텍스트 노드 수집
+  // ── CSS 셀렉터로 오른쪽 패널 프로필 카드에서 직접 추출 ──
+  // 숨고 DOM 구조 (콘솔 확인):
+  //   H4.prisma-typography.headline2.primary        → 고객명
+  //   H6.prisma-typography.body3\:regular.secondary → 서비스명 (첫 번째)
+  //   H6.prisma-typography.body3\:regular.secondary → 지역 (두 번째)
+
+  const clientName = document.querySelector('h4[class*="headline2"]')
+    ?.textContent?.trim() || null;
+
+  const h6Els = document.querySelectorAll('h6[class*="body3"]');
+  const domCategory = h6Els[0]?.textContent?.trim() || null;
+
+  // textNodes는 scrapeChatMessages에서 필요하므로 유지
   const textNodes = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const text = walker.currentNode.textContent?.trim();
     if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
-  }
-
-  // ── 오른쪽 패널 프로필 카드에서 고객명 + 서비스명 추출 ──
-  // 숨고 오른쪽 패널 구조: [고객명] → [뱃지?] → [서비스명(PPT 제작 등)] → [지역(서울 마포구 등)]
-  // 지역 텍스트를 앵커로 역방향 탐색하여 서비스명과 고객명을 추출
-
-  const REGION_RE = /^(서울|경기|부산|인천|대구|대전|광주|울산|세종|제주|강원|충북|충남|전북|전남|경북|경남)/;
-  const BADGE_WORDS = new Set(["지정요청", "일반요청", "긴급요청", "새요청", "진행중", "완료", "요청중"]);
-
-  // 오른쪽 패널 텍스트 노드만 (화면 오른쪽 절반)
-  const rightNodes = textNodes.filter(({ el }) => {
-    const r = el.getBoundingClientRect();
-    return r.left > window.innerWidth * 0.5 && r.width > 0;
-  });
-
-  let clientName = null;
-  let domCategory = null;
-
-  // 지역 텍스트 앵커에서 역방향으로 서비스명 → 고객명 추출
-  for (let i = 0; i < rightNodes.length; i++) {
-    if (REGION_RE.test(rightNodes[i].text)) {
-      const before = [];
-      for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
-        const t = rightNodes[j].text;
-        if (!BADGE_WORDS.has(t) && t.length >= 2 && t.length <= 25 && !/^\d/.test(t)) {
-          before.unshift(t); // 순서 복원 (이름→서비스명)
-        }
-      }
-      // before[0] = 고객명, before[1] = 서비스명(PPT 제작 등)
-      if (before.length >= 2) {
-        clientName  = before[0];
-        domCategory = before[1];
-      } else if (before.length === 1) {
-        clientName = before[0];
-      }
-      break;
-    }
   }
 
   return { clientId, clientName, domCategory };
