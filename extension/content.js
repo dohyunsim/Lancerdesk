@@ -97,76 +97,39 @@ function extractClientInfo() {
     if (text) textNodes.push({ text, el: walker.currentNode.parentElement });
   }
 
-  // UI 텍스트 블록리스트
-  const UI_BLOCKLIST = new Set([
-    "로그아웃", "로그인", "마이페이지", "고객센터", "알림설정",
-    "전체보기", "더보기", "닫기", "취소", "확인", "저장", "삭제",
-    "설정", "홈", "검색", "채팅", "알림", "프로필", "메뉴",
-    "스마트건", "인터넷가입", "커뮤니티", "고수찾기", "받은요청",
-    "고객전환", "고용요청", "숨고페이", "일정등록", "견적요청",
-    "고객요청", "거래상세", "신고하기", "차단하기", "미접속",
-    "숨고페이요청", "고용 요청", "일정 등록", "스마트 견적",
-  ]);
+  // ── 오른쪽 패널 프로필 카드에서 고객명 + 서비스명 추출 ──
+  // 숨고 오른쪽 패널 구조: [고객명] → [뱃지?] → [서비스명(PPT 제작 등)] → [지역(서울 마포구 등)]
+  // 지역 텍스트를 앵커로 역방향 탐색하여 서비스명과 고객명을 추출
 
-  // 이름 후보 판별: 블록리스트 제외, 타임스탬프/숫자 제외, 한글 또는 영문 포함
-  function isNameCandidate(t) {
-    if (!t || t.length < 2 || t.length > 20) return false;
-    if (UI_BLOCKLIST.has(t.replace(/\s/g, ""))) return false;
-    if (UI_BLOCKLIST.has(t)) return false;
-    if (/^\d/.test(t)) return false;
-    if (/\d+(시간|분|일|초)/.test(t)) return false;
-    if (/^(오[전후]|AM|PM|\d{1,2}:\d{2})/.test(t)) return false;
-    if (/^[0-9\s\-_\.]+$/.test(t)) return false;
-    return /[가-힣A-Za-z]/.test(t);
-  }
+  const REGION_RE = /^(서울|경기|부산|인천|대구|대전|광주|울산|세종|제주|강원|충북|충남|전북|전남|경북|경남)/;
+  const BADGE_WORDS = new Set(["지정요청", "일반요청", "긴급요청", "새요청", "진행중", "완료", "요청중"]);
 
-  // 고객명: "N시간 전 접속" 요소의 가까운 컨테이너(조상 순회)에서 이름 탐색
-  // 전역 역방향 스캔 대신 좁은 DOM 컨텍스트만 탐색 → UI 단어 오인 방지
+  // 오른쪽 패널 텍스트 노드만 (화면 오른쪽 절반)
+  const rightNodes = textNodes.filter(({ el }) => {
+    const r = el.getBoundingClientRect();
+    return r.left > window.innerWidth * 0.5 && r.width > 0;
+  });
+
   let clientName = null;
-  {
-    let accessEl = null;
-    for (const { text, el } of textNodes) {
-      if (/\d+(시간|분|일|초)\s*전\s*접속/.test(text)) { accessEl = el; break; }
-    }
-    if (accessEl) {
-      let container = accessEl.parentElement;
-      for (let depth = 0; depth < 7 && container && !clientName; depth++) {
-        const innerTexts = [];
-        const w = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-        while (w.nextNode()) {
-          const t = (w.currentNode.textContent || "").trim();
-          if (t) innerTexts.push(t);
-        }
-        const candidates = innerTexts.filter(isNameCandidate);
-        // 후보가 1~4개인 컨테이너: 좁아서 UI 텍스트가 섞이지 않음
-        if (candidates.length >= 1 && candidates.length <= 4) {
-          clientName = candidates[0];
-        }
-        container = container.parentElement;
-      }
-    }
-  }
-
-  // 폴백: heading 요소에서 이름 탐색
-  if (!clientName) {
-    for (const h of document.querySelectorAll("h1,h2,h3,h4")) {
-      const t = h.textContent?.trim() || "";
-      if (isNameCandidate(t)) { clientName = t; break; }
-    }
-  }
-
-  // 카테고리: 서비스 키워드가 포함된 짧은 텍스트 노드
-  const categoryKeywords = [
-    "제작", "개발", "번역", "편집", "디자인", "작성",
-    "촬영", "컨설팅", "PPT", "ppt", "영상", "웹", "앱", "로고", "배너",
-  ];
   let domCategory = null;
-  for (const { text } of textNodes) {
-    if (
-      text.length >= 2 && text.length <= 20 &&
-      categoryKeywords.some((kw) => text.includes(kw))
-    ) {
-      domCategory = text;
+
+  // 지역 텍스트 앵커에서 역방향으로 서비스명 → 고객명 추출
+  for (let i = 0; i < rightNodes.length; i++) {
+    if (REGION_RE.test(rightNodes[i].text)) {
+      const before = [];
+      for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
+        const t = rightNodes[j].text;
+        if (!BADGE_WORDS.has(t) && t.length >= 2 && t.length <= 25 && !/^\d/.test(t)) {
+          before.unshift(t); // 순서 복원 (이름→서비스명)
+        }
+      }
+      // before[0] = 고객명, before[1] = 서비스명(PPT 제작 등)
+      if (before.length >= 2) {
+        clientName  = before[0];
+        domCategory = before[1];
+      } else if (before.length === 1) {
+        clientName = before[0];
+      }
       break;
     }
   }
