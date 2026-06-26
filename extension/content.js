@@ -1,6 +1,11 @@
 // Lancerdesk Content Script — soomgo.com chat scraper
 // Runs in the context of soomgo.com pages
 
+// 숨고 채팅 대화창 URL인지 확인 (/chats/{id} 패턴)
+function isChatPage() {
+  return /\/chats\/\d+/.test(window.location.href);
+}
+
 const CATEGORY_CONFIG = {
   ppt: {
     label: "PPT/프레젠테이션",
@@ -253,7 +258,7 @@ function startObserving() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       const data = scrapeChatMessages();
-      if (data) {
+      if (data && data.messages.length > 0) {
         chrome.runtime.sendMessage({
           type: "CHAT_UPDATED",
           payload: data,
@@ -268,17 +273,20 @@ function startObserving() {
   });
 }
 
-// Initial scrape on load
-const initialData = scrapeChatMessages();
-if (initialData) {
-  chrome.runtime.sendMessage({
-    type: "CHAT_UPDATED",
-    payload: initialData,
-  });
-}
+// 채팅 대화창 페이지에서만 실행
+if (isChatPage()) {
+  // Initial scrape on load
+  const initialData = scrapeChatMessages();
+  if (initialData && initialData.messages.length > 0) {
+    chrome.runtime.sendMessage({
+      type: "CHAT_UPDATED",
+      payload: initialData,
+    });
+  }
 
-// Start watching for changes
-startObserving();
+  // Start watching for changes
+  startObserving();
+}
 
 /**
  * 채팅 컨테이너를 최상단까지 스크롤해서 이전 메시지를 모두 로드한다.
