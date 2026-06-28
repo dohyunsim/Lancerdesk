@@ -69,18 +69,6 @@ export default function ConversationCard({
         </a>
       )}
 
-      {/* Last message preview */}
-      {lastMessage ? (
-        <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-2.5 line-clamp-3">
-          <span className="font-semibold text-gray-500">
-            {lastMessage.role === "freelancer" ? "나" : "클라이언트"}:
-          </span>{" "}
-          {lastMessage.content}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-400">메시지 없음</p>
-      )}
-
       {/* Footer */}
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs text-gray-400">
