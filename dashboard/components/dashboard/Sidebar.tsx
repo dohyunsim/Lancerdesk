@@ -56,7 +56,7 @@ export default function Sidebar() {
             <p className="text-xs text-gray-400 truncate">{user.name}</p>
           </div>
         )}
-        <p className="text-xs text-gray-600">v1.0.0</p>
+        <p className="text-xs text-gray-600">v1.1.0</p>
       </div>
     </aside>
   );
