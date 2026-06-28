@@ -397,8 +397,8 @@ async function hideConvId(id) {
   await new Promise((r) => chrome.storage.local.set({ hiddenConvIds: [...hidden, id] }, r));
 }
 
-// Service Worker(background.js)는 비활성화 시 자동 종료돼 응답이 없을 수 있음.
-// sidepanel은 extension context이므로 chrome.storage + fetch를 직접 사용.
+// sidepanel은 extension context → chrome.storage + fetch 직접 사용
+// (background Service Worker를 거치면 SW 종료 시 응답이 없음)
 async function loadConversations() {
   const { jwtToken } = await new Promise((r) => chrome.storage.local.get(["jwtToken"], r));
 
@@ -412,126 +412,122 @@ async function loadConversations() {
     const res = await fetch(`${API_BASE_URL_SP}/conversations`, {
       headers: { Authorization: `Bearer ${jwtToken}` },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      conversationList.innerHTML = `<li class="empty-msg">불러오기 실패 (${res.status})</li>`;
+      return;
+    }
     data = await res.json();
   } catch (e) {
-    conversationList.innerHTML = '<li class="empty-msg">대화를 불러오지 못했습니다.</li>';
+    conversationList.innerHTML = '<li class="empty-msg">서버 연결 실패</li>';
     return;
   }
 
   if (!Array.isArray(data) || !data.length) {
+    conversationList.innerHTML = '<li class="empty-msg">저장된 대화가 없습니다.</li>';
+    return;
+  }
+
+  const hidden = await getHiddenConvIds();
+  const seen = new Set();
+  const deduped = data.filter((conv) => {
+    if (hidden.includes(conv.id)) return false;
+    const key = conv.soomgo_url || conv.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (!deduped.length) {
     conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
     return;
   }
 
-  // 아래 블록은 기존 코드와 동일한 처리를 위해 response.data → data로 치환
-  (async (data) => {
+  // 7일 이내 대화만 표시
+  const now = Date.now();
+  const DAYS_7_MS = 7 * 24 * 60 * 60 * 1000;
+  const recent = deduped.filter((conv) => {
+    const lastActivity = new Date(conv.updated_at || conv.created_at).getTime();
+    return !isNaN(lastActivity) && (now - lastActivity) <= DAYS_7_MS;
+  });
 
-    const hidden = await getHiddenConvIds();
-    const seen = new Set();
-    const deduped = data.filter((conv) => {
-      if (hidden.includes(conv.id)) return false;
-      const key = conv.soomgo_url || conv.id;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  if (!recent.length) {
+    conversationList.innerHTML = '<li class="empty-msg">최근 7일 내 대화가 없습니다.</li>';
+    return;
+  }
 
-    if (!deduped.length) {
-      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
-      return;
-    }
+  const fmtDate = (iso) => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+  };
 
-    const now = Date.now();
-    const HOURS_48_MS = 48 * 60 * 60 * 1000;
-    const recent = deduped.filter((conv) => {
-      const lastActivity = new Date(conv.updated_at || conv.created_at).getTime();
-      return !isNaN(lastActivity) && (now - lastActivity) <= HOURS_48_MS;
-    });
+  conversationList.innerHTML = recent.slice(0, 20).map((conv) => {
+    const name      = conv.client_name || "고객명 미확인";
+    const cat       = conv.category    || "미분류";
+    const firstDate = fmtDate(conv.created_at);
+    const lastDate  = fmtDate(conv.updated_at);
+    const sameDate  = firstDate === lastDate;
+    const convUrl   = conv.soomgo_url || "";
+    return `
+      <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
+        <div class="conv-main">
+          <span class="conv-client-name">${name}</span>
+          <span class="conv-category-tag">${cat}</span>
+        </div>
+        <div class="conv-dates">
+          <span class="conv-date-label">첫 상담</span>
+          <span class="conv-date-val">${firstDate}</span>
+          ${sameDate ? "" : `<span class="conv-date-sep">→</span>
+          <span class="conv-date-label">최근</span>
+          <span class="conv-date-val">${lastDate}</span>`}
+        </div>
+        <div class="conv-actions">
+          <button class="conv-action-btn conv-dash-btn" data-id="${conv.id}" title="대시보드에 추가">📋</button>
+          <button class="conv-action-btn conv-delete-btn" data-id="${conv.id}" title="삭제">✕</button>
+        </div>
+      </li>`;
+  }).join("");
 
-    if (!recent.length) {
-      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
-      return;
-    }
-
-    const fmtDate = (iso) => {
-      if (!iso) return "-";
-      const d = new Date(iso);
-      return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
-    };
-
-    conversationList.innerHTML = recent.slice(0, 15).map((conv) => {
-      const name      = conv.client_name || "고객명 미확인";
-      const cat       = conv.category    || "미분류";
-      const firstDate = fmtDate(conv.created_at);
-      const lastDate  = fmtDate(conv.updated_at);
-      const sameDate  = firstDate === lastDate;
-      const convUrl   = conv.soomgo_url || "";
-      return `
-        <li class="conv-item conv-item-link" data-id="${conv.id}" data-url="${convUrl}">
-          <div class="conv-main">
-            <span class="conv-client-name">${name}</span>
-            <span class="conv-category-tag">${cat}</span>
-          </div>
-          <div class="conv-dates">
-            <span class="conv-date-label">첫 상담</span>
-            <span class="conv-date-val">${firstDate}</span>
-            ${sameDate ? "" : `<span class="conv-date-sep">→</span>
-            <span class="conv-date-label">최근</span>
-            <span class="conv-date-val">${lastDate}</span>`}
-          </div>
-          <div class="conv-actions">
-            <button class="conv-action-btn conv-dash-btn" data-id="${conv.id}" title="대시보드에 추가">📋</button>
-            <button class="conv-action-btn conv-delete-btn" data-id="${conv.id}" title="삭제">✕</button>
-          </div>
-        </li>`;
-    }).join("");
-
-    // 항목 클릭 → 해당 숨고 채팅방으로 이동
-    conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
-      item.addEventListener("click", (e) => {
-        if (e.target.closest(".conv-action-btn")) return;
-        const url = item.dataset.url;
-        if (!url) return;
-        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-          if (tab?.id) chrome.tabs.update(tab.id, { url });
-        });
+  conversationList.querySelectorAll(".conv-item-link").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".conv-action-btn")) return;
+      const url = item.dataset.url;
+      if (!url) return;
+      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+        if (tab?.id) chrome.tabs.update(tab.id, { url });
       });
     });
+  });
 
-    // 대시보드 버튼 → 프로젝트 자동 생성 후 프로젝트 상세 페이지 열기
-    conversationList.querySelectorAll(".conv-dash-btn").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const convId = btn.dataset.id;
-        btn.disabled = true;
-        const origText = btn.textContent;
-        btn.textContent = "⏳";
-
-        chrome.runtime.sendMessage(
-          { type: "CREATE_PROJECT_FROM_CONV", payload: { conversationId: convId } },
-          (res) => {
-            btn.disabled = false;
-            btn.textContent = origText;
-            if (res?.success && res.projectId) {
-              chrome.tabs.create({ url: `${DASHBOARD_URL}/projects/${res.projectId}` });
-            } else {
-              chrome.tabs.create({ url: `${DASHBOARD_URL}/projects` });
-            }
+  conversationList.querySelectorAll(".conv-dash-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const convId = btn.dataset.id;
+      btn.disabled = true;
+      const origText = btn.textContent;
+      btn.textContent = "⏳";
+      chrome.runtime.sendMessage(
+        { type: "CREATE_PROJECT_FROM_CONV", payload: { conversationId: convId } },
+        (res) => {
+          btn.disabled = false;
+          btn.textContent = origText;
+          if (res?.success && res.projectId) {
+            chrome.tabs.create({ url: `${DASHBOARD_URL}/projects/${res.projectId}` });
+          } else {
+            chrome.tabs.create({ url: `${DASHBOARD_URL}/projects` });
           }
-        );
-      });
+        }
+      );
     });
+  });
 
-    // 삭제 버튼 → 로컬 히든 목록에 추가
-    conversationList.querySelectorAll(".conv-delete-btn").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await hideConvId(btn.dataset.id);
-        loadConversations();
-      });
+  conversationList.querySelectorAll(".conv-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await hideConvId(btn.dataset.id);
+      loadConversations();
     });
-  })(data);
+  });
 }
 
 // ─── Reply Styles ─────────────────────────────────────────────────────────────
