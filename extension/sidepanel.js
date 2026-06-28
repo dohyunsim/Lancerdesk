@@ -386,7 +386,8 @@ copyBtn.addEventListener("click", () => {
 });
 
 // ─── Conversation List ────────────────────────────────────────────────────────
-const DASHBOARD_URL = "https://lancerdesk-dashboard.vercel.app";
+const DASHBOARD_URL  = "https://lancerdesk-dashboard.vercel.app";
+const API_BASE_URL_SP = "https://backend-production-53b3f.up.railway.app";
 
 async function getHiddenConvIds() {
   return new Promise((r) => chrome.storage.local.get(["hiddenConvIds"], (s) => r(s.hiddenConvIds || [])));
@@ -396,25 +397,39 @@ async function hideConvId(id) {
   await new Promise((r) => chrome.storage.local.set({ hiddenConvIds: [...hidden, id] }, r));
 }
 
+// Service Worker(background.js)는 비활성화 시 자동 종료돼 응답이 없을 수 있음.
+// sidepanel은 extension context이므로 chrome.storage + fetch를 직접 사용.
 async function loadConversations() {
-  const isLoggedIn = await new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (res) => resolve(res?.isLoggedIn || false));
-  });
+  const { jwtToken } = await new Promise((r) => chrome.storage.local.get(["jwtToken"], r));
 
-  if (!isLoggedIn) {
+  if (!jwtToken) {
     conversationList.innerHTML = '<li class="empty-msg">로그인이 필요합니다.</li>';
     return;
   }
 
-  chrome.runtime.sendMessage({ type: "FETCH_CONVERSATIONS" }, async (response) => {
-    if (!response?.success || !response.data?.length) {
-      conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
-      return;
-    }
+  let data;
+  try {
+    const res = await fetch(`${API_BASE_URL_SP}/conversations`, {
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (e) {
+    conversationList.innerHTML = '<li class="empty-msg">대화를 불러오지 못했습니다.</li>';
+    return;
+  }
+
+  if (!Array.isArray(data) || !data.length) {
+    conversationList.innerHTML = '<li class="empty-msg">대화가 없습니다.</li>';
+    return;
+  }
+
+  // 아래 블록은 기존 코드와 동일한 처리를 위해 response.data → data로 치환
+  (async (data) => {
 
     const hidden = await getHiddenConvIds();
     const seen = new Set();
-    const deduped = response.data.filter((conv) => {
+    const deduped = data.filter((conv) => {
       if (hidden.includes(conv.id)) return false;
       const key = conv.soomgo_url || conv.id;
       if (seen.has(key)) return false;
@@ -516,7 +531,7 @@ async function loadConversations() {
         loadConversations();
       });
     });
-  });
+  })(data);
 }
 
 // ─── Reply Styles ─────────────────────────────────────────────────────────────
