@@ -148,9 +148,9 @@ logoutBtn.addEventListener("click", () => {
   });
 });
 
-// 대시보드 FAB → 새 탭으로 대시보드 열기
+// 대시보드 FAB → 새 탭으로 대시보드 대화 목록 열기
 dashboardFab.addEventListener("click", () => {
-  chrome.tabs.create({ url: DASHBOARD_URL }, () => {
+  chrome.tabs.create({ url: `${DASHBOARD_URL}/conversations` }, () => {
     if (chrome.runtime.lastError) {
       console.error("대시보드 열기 실패:", chrome.runtime.lastError.message);
     }
@@ -447,7 +447,7 @@ async function loadConversations() {
 
     conversationList.innerHTML = recent.slice(0, 15).map((conv) => {
       const name      = conv.client_name || "고객명 미확인";
-      const cat       = conv.category    || "general";
+      const cat       = conv.category    || "미분류";
       const firstDate = fmtDate(conv.created_at);
       const lastDate  = fmtDate(conv.updated_at);
       const sameDate  = firstDate === lastDate;

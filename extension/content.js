@@ -6,72 +6,6 @@ function isChatPage() {
   return /\/chats\/\d+/.test(window.location.href);
 }
 
-const CATEGORY_CONFIG = {
-  ppt: {
-    label: "PPT/프레젠테이션",
-    keywords: [
-      "ppt", "파워포인트", "powerpoint", "프레젠테이션", "발표 자료",
-      "슬라이드", "키노트", "keynote", "피티", "발표자료",
-    ],
-  },
-  design: {
-    label: "디자인",
-    keywords: [
-      "디자인", "design", "포스터", "배너", "로고", "logo",
-      "브랜딩", "branding", "일러스트", "illustrator", "포토샵",
-      "photoshop", "ui", "ux", "카드뉴스", "인포그래픽",
-    ],
-  },
-  video: {
-    label: "영상/편집",
-    keywords: [
-      "영상", "video", "편집", "유튜브", "youtube", "릴스", "숏츠",
-      "애니메이션", "animation", "모션그래픽", "motion", "촬영",
-    ],
-  },
-  writing: {
-    label: "글쓰기/번역",
-    keywords: [
-      "글쓰기", "번역", "translation", "카피라이팅", "copywriting",
-      "블로그", "blog", "콘텐츠", "content", "원고", "에세이",
-    ],
-  },
-  dev: {
-    label: "개발",
-    keywords: [
-      "개발", "development", "코딩", "coding", "웹사이트", "website",
-      "앱", "app", "react", "vue", "javascript", "python", "api",
-    ],
-  },
-};
-
-/**
- * Detect category from conversation text.
- * @param {string} text - Full conversation text
- * @returns {string} - Category key or 'general'
- */
-function detectCategory(text) {
-  const lower = text.toLowerCase();
-  for (const [key, config] of Object.entries(CATEGORY_CONFIG)) {
-    if (config.keywords.some((kw) => lower.includes(kw))) {
-      return key;
-    }
-  }
-  return "general";
-}
-
-/**
- * Detect category from a DOM label string.
- * @param {string} label - Category label text from DOM
- * @returns {string} - Category key or 'general'
- */
-function detectCategoryFromLabel(label) {
-  const lower = label.toLowerCase();
-  for (const [key, config] of Object.entries(CATEGORY_CONFIG)) {
-    if (config.keywords.some((kw) => lower.includes(kw))) return key;
-  }
-  return "general";
-}
 
 /**
  * Extract client/room ID, name, and DOM category from the current soomgo.com URL and page.
@@ -90,16 +24,34 @@ function extractClientInfo() {
     : null;
 
   // ── CSS 셀렉터로 오른쪽 패널 프로필 카드에서 직접 추출 ──
-  // 숨고 DOM 구조 (콘솔 확인):
-  //   H4.prisma-typography.headline2.primary        → 고객명
-  //   H6.prisma-typography.body3\:regular.secondary → 서비스명 (첫 번째)
-  //   H6.prisma-typography.body3\:regular.secondary → 지역 (두 번째)
+  // 숨고 DOM 구조 (2026-06 기준 콘솔 확인):
+  //   H4 (class 없음, .usermenu-dropdown 외부)         → 고객명 ("심도현 고객님")
+  //   DIV.service-name-text-wrapper                    → 서비스명/카테고리 ("주식 레슨")
+  //
+  // 구버전 셀렉터(h4[class*="headline2"], h6[class*="body3"])는
+  // 현재 숨고 마크업에서 동작하지 않으므로 아래 셀렉터로 교체.
 
-  const clientName = document.querySelector('h4[class*="headline2"]')
-    ?.textContent?.trim() || null;
+  // 고객명: prisma-typography headline2 클래스를 가진 h4 우선 (오른쪽 패널 고객 이름)
+  // 숨고 DOM (2026-06 확인): h4 목록 중 첫 번째 비드롭다운은 내 이름(고수명)이 잡히므로
+  // headline2 클래스를 가진 h4를 우선 선택하고, 없으면 마지막 비드롭다운 h4 fallback
+  const h4List = Array.from(document.querySelectorAll('h4')).filter(
+    (el) => !el.closest('.usermenu-dropdown')
+  );
+  const clientName =
+    (h4List.find((el) => el.className.includes('headline2')) || h4List[h4List.length - 1])
+      ?.textContent?.trim() || null;
 
-  const h6Els = document.querySelectorAll('h6[class*="body3"]');
-  const domCategory = h6Els[0]?.textContent?.trim() || null;
+  // 카테고리(서비스명): .quote-info 내부 .service 스팬 우선 (2026-06 확인)
+  // .category, .service-name-text-wrapper 는 현재 숨고 마크업에 존재하지 않음
+  const domCategory =
+    document.querySelector('.quote-info .service')
+      ?.textContent?.trim() ||
+    document.querySelector('.service')
+      ?.textContent?.trim() ||
+    document.querySelector('.category')
+      ?.textContent?.trim() ||
+    document.querySelector('.service-name-text-wrapper')
+      ?.textContent?.trim() || null;
 
   // textNodes는 scrapeChatMessages에서 필요하므로 유지
   const textNodes = [];
@@ -201,11 +153,11 @@ function scrapeChatMessages() {
   const cleaned = messages.filter((m) => m.content.trim().length > 1);
 
   if (!cleaned.length) {
-    return { messages: [], url: window.location.href, category: "general", clientId, clientName, domCategory };
+    return { messages: [], url: window.location.href, category: '', clientId, clientName, domCategory };
   }
 
   const fullText = cleaned.map((m) => m.content).join(" ");
-  const category = domCategory ? detectCategoryFromLabel(domCategory) : detectCategory(fullText);
+  const category = domCategory || '';
 
   return {
     messages: cleaned,
