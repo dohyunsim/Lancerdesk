@@ -153,6 +153,56 @@ def append_message(
             return dict(row)
 
 
+@router.post("/{conversation_id}/create-project")
+def create_project_from_conversation(
+    conversation_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """conversation 기반 프로젝트 자동 생성 (이미 있으면 기존 반환)"""
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # conversation 조회
+            cur.execute("SELECT * FROM conversations WHERE id = %s", (conversation_id,))
+            conv = cur.fetchone()
+            if not conv:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            if user["auth_type"] == "jwt" and conv["user_id"] != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Forbidden")
+
+            # 이미 project_id가 연결되어 있으면 기존 프로젝트 반환
+            if conv.get("project_id"):
+                cur.execute("SELECT * FROM projects WHERE id = %s", (str(conv["project_id"]),))
+                existing = cur.fetchone()
+                if existing:
+                    return {"project": dict(existing), "created": False}
+
+            # 새 프로젝트 생성
+            title = f"{conv['client_name'] or '고객'} - {conv['category'] or '미분류'} 상담"
+            cur.execute(
+                """
+                INSERT INTO projects (user_id, title, category, status, client_name)
+                VALUES (%s, %s, %s, 'active', %s)
+                RETURNING *
+                """,
+                (
+                    conv["user_id"],
+                    title,
+                    conv["category"] or "",
+                    conv["client_name"] or "",
+                ),
+            )
+            project = dict(cur.fetchone())
+
+            # conversation에 project_id 연결
+            cur.execute(
+                "UPDATE conversations SET project_id = %s WHERE id = %s",
+                (str(project["id"]), conversation_id),
+            )
+            conn.commit()
+
+            return {"project": project, "created": True}
+
+
 @router.delete("/{conversation_id}")
 def delete_conversation(
     conversation_id: UUID,

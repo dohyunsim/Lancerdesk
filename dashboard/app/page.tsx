@@ -4,14 +4,6 @@ import { useEffect, useState } from "react";
 import { analyticsApi, AnalyticsSummary, MonthlyData } from "@/lib/api";
 import StatCard from "@/components/dashboard/StatCard";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  ppt: "PPT/프레젠테이션",
-  design: "디자인",
-  video: "영상/편집",
-  writing: "글쓰기/번역",
-  dev: "개발",
-  general: "일반",
-};
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -96,7 +88,7 @@ export default function DashboardPage() {
               className="flex items-center gap-2 bg-indigo-50 rounded-full px-4 py-1.5"
             >
               <span className="text-xs font-semibold text-indigo-700">
-                {CATEGORY_LABELS[cat] ?? cat}
+                {cat}
               </span>
               <span className="text-xs text-indigo-500 font-bold">{count}</span>
             </div>

@@ -9,14 +9,6 @@ const MONTH_NAMES = [
   "7월", "8월", "9월", "10월", "11월", "12월",
 ];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  ppt: "PPT/프레젠테이션",
-  design: "디자인",
-  video: "영상/편집",
-  writing: "글쓰기/번역",
-  dev: "개발",
-  general: "일반",
-};
 
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -77,7 +69,7 @@ export default function AnalyticsPage() {
             return (
               <div key={cat}>
                 <div className="flex justify-between text-xs text-gray-600 mb-1">
-                  <span>{CATEGORY_LABELS[cat] ?? cat}</span>
+                  <span>{cat}</span>
                   <span className="font-semibold">{count}건 ({pct}%)</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-2">

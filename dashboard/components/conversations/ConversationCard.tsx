@@ -49,14 +49,12 @@ export default function ConversationCard({
       </div>
 
       {/* Client name */}
-      {conversation.client_name && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-gray-800">
-            {conversation.client_name}
-          </span>
-          <span className="text-xs text-gray-400">고객</span>
-        </div>
-      )}
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm font-semibold text-gray-800">
+          {conversation.client_name || "고객명 미확인"}
+        </span>
+        <span className="text-xs text-gray-400">고객</span>
+      </div>
 
       {/* URL */}
       {conversation.soomgo_url && (

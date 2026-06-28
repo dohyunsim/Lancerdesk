@@ -306,4 +306,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     });
     return true;
   }
+
+  if (type === "CREATE_PROJECT_FROM_CONV") {
+    const { conversationId } = payload;
+    apiRequest(`/conversations/${conversationId}/create-project`, { method: "POST" })
+      .then((data) => sendResponse({ success: true, projectId: data.project.id, created: data.created }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
 });

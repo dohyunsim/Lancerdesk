@@ -104,6 +104,11 @@ export const conversationsApi = {
     request<Conversation>(`/conversations/${id}`),
   delete: (id: string): Promise<void> =>
     request<void>(`/conversations/${id}`, { method: 'DELETE' }),
+  createProject: (conversationId: string): Promise<{ project: Project; created: boolean }> =>
+    request<{ project: Project; created: boolean }>(
+      `/conversations/${conversationId}/create-project`,
+      { method: 'POST' }
+    ),
 }
 
 // ─── Analytics API ────────────────────────────────────────────────────────────

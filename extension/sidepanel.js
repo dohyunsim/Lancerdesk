@@ -484,11 +484,27 @@ async function loadConversations() {
       });
     });
 
-    // 대시보드 버튼 → 대시보드 새 탭
+    // 대시보드 버튼 → 프로젝트 자동 생성 후 프로젝트 상세 페이지 열기
     conversationList.querySelectorAll(".conv-dash-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        chrome.tabs.create({ url: `${DASHBOARD_URL}/conversations` });
+        const convId = btn.dataset.id;
+        btn.disabled = true;
+        const origText = btn.textContent;
+        btn.textContent = "⏳";
+
+        chrome.runtime.sendMessage(
+          { type: "CREATE_PROJECT_FROM_CONV", payload: { conversationId: convId } },
+          (res) => {
+            btn.disabled = false;
+            btn.textContent = origText;
+            if (res?.success && res.projectId) {
+              chrome.tabs.create({ url: `${DASHBOARD_URL}/projects/${res.projectId}` });
+            } else {
+              chrome.tabs.create({ url: `${DASHBOARD_URL}/projects` });
+            }
+          }
+        );
       });
     });
 
