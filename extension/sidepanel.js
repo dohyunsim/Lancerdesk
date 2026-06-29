@@ -412,6 +412,13 @@ async function loadConversations() {
     const res = await fetch(`${API_BASE_URL_SP}/conversations`, {
       headers: { Authorization: `Bearer ${jwtToken}` },
     });
+    if (res.status === 401 || res.status === 403) {
+      // 토큰 만료 → 저장 토큰 삭제 후 로그인 화면으로 전환
+      await new Promise((r) => chrome.storage.local.remove(["jwtToken", "userId", "userEmail"], r));
+      conversationList.innerHTML = '<li class="empty-msg">세션 만료 — 다시 로그인해주세요.</li>';
+      checkAuthState();
+      return;
+    }
     if (!res.ok) {
       conversationList.innerHTML = `<li class="empty-msg">불러오기 실패 (${res.status})</li>`;
       return;
