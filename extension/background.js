@@ -66,17 +66,15 @@ async function saveConversation(chatData) {
 
   if (cachedId) {
     chrome.storage.local.set({ currentConversationId: cachedId });
-    // client_name이 새로 파싱됐을 때만 PATCH (updated_at 갱신 겸)
-    if (chatData.clientName || chatData.category) {
-      apiRequest(`/conversations/${cachedId}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          client_name: chatData.clientName || undefined,
-          client_id:   chatData.clientId   || undefined,
-          category:    chatData.category   || undefined,
-        }),
-      }).catch(() => {});
-    }
+    // 항상 PATCH → updated_at = NOW() 갱신 보장
+    apiRequest(`/conversations/${cachedId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(chatData.clientName ? { client_name: chatData.clientName } : {}),
+        ...(chatData.clientId   ? { client_id:   chatData.clientId }   : {}),
+        ...(chatData.category   ? { category:    chatData.category }   : {}),
+      }),
+    }).catch(() => {});
     return { id: cachedId };
   }
 
@@ -89,13 +87,13 @@ async function saveConversation(chatData) {
       const existingId = existing[0].id;
       urlConvMap[soomgoUrl] = existingId;
       chrome.storage.local.set({ urlConvMap, currentConversationId: existingId });
-      // client_name / updated_at 갱신
+      // 항상 PATCH → updated_at = NOW() 갱신 보장
       apiRequest(`/conversations/${existingId}`, {
         method: "PATCH",
         body: JSON.stringify({
-          client_name: chatData.clientName || undefined,
-          client_id:   chatData.clientId   || undefined,
-          category:    chatData.category   || undefined,
+          ...(chatData.clientName ? { client_name: chatData.clientName } : {}),
+          ...(chatData.clientId   ? { client_id:   chatData.clientId }   : {}),
+          ...(chatData.category   ? { category:    chatData.category }   : {}),
         }),
       }).catch(() => {});
       return { id: existingId };

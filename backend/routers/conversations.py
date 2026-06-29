@@ -88,7 +88,7 @@ def update_conversation(
     payload: ConversationUpdate,
     user: dict = Depends(get_current_user),
 ) -> dict:
-    fields = []
+    fields = ["updated_at = NOW()"]
     values = []
     if payload.project_id is not None:
         fields.append("project_id = %s")
@@ -105,9 +105,6 @@ def update_conversation(
     if payload.client_id is not None:
         fields.append("client_id = %s")
         values.append(payload.client_id)
-
-    if not fields:
-        raise HTTPException(status_code=400, detail="No fields to update")
 
     values.append(str(conversation_id))
     if user["auth_type"] == "jwt":

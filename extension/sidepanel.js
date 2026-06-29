@@ -442,16 +442,16 @@ async function loadConversations() {
     return;
   }
 
-  // 7일 이내 대화만 표시
+  // 30일 이내 대화만 표시
   const now = Date.now();
-  const DAYS_7_MS = 7 * 24 * 60 * 60 * 1000;
+  const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
   const recent = deduped.filter((conv) => {
     const lastActivity = new Date(conv.updated_at || conv.created_at).getTime();
-    return !isNaN(lastActivity) && (now - lastActivity) <= DAYS_7_MS;
+    return !isNaN(lastActivity) && (now - lastActivity) <= DAYS_30_MS;
   });
 
   if (!recent.length) {
-    conversationList.innerHTML = '<li class="empty-msg">최근 7일 내 대화가 없습니다.</li>';
+    conversationList.innerHTML = '<li class="empty-msg">최근 30일 내 대화가 없습니다.</li>';
     return;
   }
 
